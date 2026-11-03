@@ -1,0 +1,12 @@
+{"id": "train-241", "fact_checker": "not_enough_evidence", "model": "conflicting", "note": "mock"}
+{"id": "train-251", "fact_checker": "refuted", "model": "conflicting", "note": "mock"}
+{"id": "train-258", "fact_checker": "refuted", "model": "conflicting", "note": "mock"}
+{"id": "train-264", "fact_checker": "not_enough_evidence", "model": "conflicting", "note": "mock"}
+{"id": "train-2899", "fact_checker": "refuted", "model": "conflicting", "note": "mock"}
+{"id": "train-1486", "fact_checker": "refuted", "model": "conflicting", "note": "mock"}
+{"id": "train-731", "fact_checker": "supported", "model": "conflicting", "note": "mock"}
+{"id": "train-2279", "fact_checker": "conflicting", "model": "conflicting", "note": "mock"}
+{"id": "train-2288", "fact_checker": "supported", "model": "conflicting", "note": "mock"}
+{"id": "cr-186", "fact_checker": "refuted", "model": "conflicting", "note": "mock"}
+{"id": "cr-255", "fact_checker": "refuted", "model": "conflicting", "note": "mock"}
+{"id": "cr-759", "fact_checker": "refuted", "model": "conflicting", "note": "mock"}

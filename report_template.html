@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Short-video fact-check: results</title>
+<style>
+.viz-root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface-1: #fcfcfb;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --sys-base: #898781;
+  --lab-supported: #2a78d6; --lab-unverified: #a3a29a; --lab-contradicted: #e34948;
+  --wash: rgba(42,120,214,0.10); --good-text: #006300; --bad-text: #b3261e;
+  --seq-1: #cde2fb; --seq-2: #9ec5f4; --seq-3: #6da7ec; --seq-4: #3987e5; --seq-5: #256abf; --seq-6: #184f95; --seq-7: #0d366b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface-1: #1a1a19;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --sys-base: #8a8984;
+    --lab-supported: #3987e5; --lab-unverified: #6b6a64; --lab-contradicted: #e66767;
+    --wash: rgba(57,135,229,0.14); --good-text: #0ca30c; --bad-text: #e66767;
+    --seq-1: #104281; --seq-2: #184f95; --seq-3: #1c5cab; --seq-4: #256abf; --seq-5: #3987e5; --seq-6: #6da7ec; --seq-7: #b7d3f6;
+  }
+}
+:root[data-theme="dark"] .viz-root {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface-1: #1a1a19;
+  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --sys-base: #8a8984;
+  --lab-supported: #3987e5; --lab-unverified: #6b6a64; --lab-contradicted: #e66767;
+  --wash: rgba(57,135,229,0.14); --good-text: #0ca30c; --bad-text: #e66767;
+  --seq-1: #104281; --seq-2: #184f95; --seq-3: #1c5cab; --seq-4: #256abf; --seq-5: #3987e5; --seq-6: #6da7ec; --seq-7: #b7d3f6;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+.viz-root { font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--page); color: var(--text-primary); min-height: 100vh; padding: 28px 32px 64px; }
+.wrap { max-width: 1240px; margin: 0 auto; }
+header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 18px; }
+h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+h2 { font-size: 15px; font-weight: 600; margin: 32px 0 10px; color: var(--text-secondary); text-transform: none; }
+.sub { color: var(--text-secondary); font-size: 13px; }
+.muted { color: var(--text-muted); }
+.banner { border: 1px solid var(--border); background: var(--surface-1); border-left: 4px solid #fab219; padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; }
+.filters { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; padding: 10px 0 14px; border-bottom: 1px solid var(--grid); margin-bottom: 8px; position: sticky; top: 0; background: var(--page); z-index: 5; }
+.filters label { font-size: 12px; color: var(--text-secondary); display: flex; gap: 8px; align-items: center; }
+select, button, input[type=search] { font: inherit; font-size: 13px; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px; }
+button { cursor: pointer; }
+button:hover, select:hover { background: var(--grid); }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; }
+.seg button[aria-pressed="true"] { background: var(--text-primary); color: var(--surface-1); }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid .wide { grid-column: 1 / -1; }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px 14px; min-width: 0; }
+.card-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.card h3 { font-size: 14px; font-weight: 600; margin: 0; }
+.card .desc { color: var(--text-secondary); font-size: 12.5px; margin: 3px 0 10px; }
+.card .toggle { font-size: 12px; padding: 3px 8px; white-space: nowrap; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--text-secondary); margin: 2px 0 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.legend i.dot { border-radius: 50%; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+.tick { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+.lbl { font-size: 12px; fill: var(--text-secondary); }
+.val { font-size: 11px; fill: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.mark { cursor: default; outline: none; transition: opacity .12s; }
+.mark:hover, .mark:focus { opacity: .78; }
+.hit { fill: transparent; }
+.kpis { display: grid; gap: 16px; }
+@media (max-width: 900px) { .kpis { grid-template-columns: 1fr !important; } }
+.tile .label { font-size: 12.5px; color: var(--text-secondary); display: flex; align-items: center; gap: 7px; }
+.tile .value { font-size: 30px; font-weight: 600; margin: 4px 0 2px; }
+.tile.hero .value { font-size: 52px; line-height: 1.05; }
+.tile .delta { font-size: 12.5px; color: var(--text-secondary); }
+.verdict { display: inline-flex; gap: 5px; align-items: center; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 8px; border: 1px solid var(--border); margin-top: 6px; }
+.verdict.good { color: var(--good-text); }
+.verdict.bad { color: var(--bad-text); }
+.verdict.nss { color: var(--text-secondary); }
+table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.data th { text-align: left; font-weight: 600; color: var(--text-secondary); border-bottom: 1px solid var(--axis); padding: 6px 8px; position: sticky; top: 0; background: var(--surface-1); }
+table.data td { border-bottom: 1px solid var(--grid); padding: 6px 8px; vertical-align: top; font-variant-numeric: tabular-nums; }
+.tablewrap { max-height: 420px; overflow: auto; }
+.chip { display: inline-flex; gap: 4px; align-items: center; white-space: nowrap; font-size: 12px; }
+.chip .sw { width: 8px; height: 8px; border-radius: 2px; }
+.ok { color: var(--good-text); font-weight: 600; }
+.no { color: var(--bad-text); font-weight: 600; }
+tr.claim { cursor: pointer; }
+tr.claim:hover td { background: var(--page); }
+tr.detail td { background: var(--page); font-size: 12px; }
+.detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.detail-grid h4 { margin: 0 0 4px; font-size: 12px; display: flex; gap: 6px; align-items: center; }
+.cite { margin: 4px 0 0; padding-left: 8px; border-left: 2px solid var(--grid); color: var(--text-secondary); word-break: break-word; }
+.toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+#tip { position: fixed; pointer-events: none; z-index: 20; background: var(--surface-1); border: 1px solid var(--border); box-shadow: 0 6px 20px rgba(0,0,0,.14); border-radius: 8px; padding: 8px 10px; font-size: 12px; min-width: 150px; max-width: 320px; display: none; }
+#tip .t { color: var(--text-secondary); margin-bottom: 4px; }
+#tip .r { display: flex; align-items: center; gap: 7px; margin-top: 2px; }
+#tip .r b { font-weight: 600; font-variant-numeric: tabular-nums; }
+#tip .r i { width: 12px; height: 2px; display: inline-block; border-radius: 1px; }
+#tip .r span { color: var(--text-secondary); }
+a { color: inherit; }
+</style>
+</head>
+<body>
+<div class="viz-root">
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Fact-checking claims in short videos</h1>
+      <div class="sub" id="meta"></div>
+    </div>
+    <button id="theme" type="button" title="Switch light/dark">Light / dark</button>
+  </header>
+  <div id="banner"></div>
+
+  <div class="filters" role="group" aria-label="Filters for every chart below">
+    <label>Claims
+      <select id="f-slice">
+        <option value="all">All claims</option>
+        <option value="nobig">Without the largest video</option>
+      </select>
+    </label>
+    <label>Claim type <select id="f-type"></select></label>
+    <label>Metric
+      <span class="seg" id="f-metric">
+        <button type="button" data-v="sb_correct" aria-pressed="true">Source-backed accuracy</button>
+        <button type="button" data-v="correct" aria-pressed="false">Label accuracy</button>
+      </span>
+    </label>
+    <span class="sub" id="f-count"></span>
+  </div>
+
+  <h2>Headline</h2>
+  <div class="kpis" id="kpis"></div>
+
+  <h2>How each system scores</h2>
+  <div class="grid">
+    <div class="card wide" id="c-board"></div>
+  </div>
+
+  <h2>Is the gain real?</h2>
+  <div class="grid">
+    <div class="card" id="c-mcnemar"></div>
+    <div class="card" id="c-gaps"></div>
+    <div class="card wide" id="c-boot"></div>
+  </div>
+
+  <h2>Where the labels go wrong</h2>
+  <div class="grid">
+    <div class="card wide" id="c-confusion"></div>
+    <div class="card" id="c-mix"></div>
+    <div class="card" id="c-bygold"></div>
+  </div>
+
+  <h2>Do the citations hold up?</h2>
+  <div class="grid">
+    <div class="card" id="c-funnel"></div>
+    <div class="card" id="c-cost"></div>
+  </div>
+
+  <h2>Breakdowns</h2>
+  <div class="grid">
+    <div class="card" id="c-bytype"></div>
+    <div class="card" id="c-extract"></div>
+    <div class="card wide" id="c-video"></div>
+  </div>
+
+  <h2>Every claim</h2>
+  <div class="grid">
+    <div class="card wide" id="c-claims"></div>
+  </div>
+</div>
+<div id="tip" role="tooltip"></div>
+</div>
+
+<script id="data" type="application/json">/*__DATA__*/{}</script>
+<script>
+"use strict";
+const D = JSON.parse(document.getElementById("data").textContent);
+const M = D.meta, SYS = M.systems, BASE = M.baseline, OTHERS = SYS.filter(s => s !== BASE);
+const NAME = M.names;
+const SHORT = s => s === BASE ? "Baseline" : NAME[s].split(":")[0];
+const COLOR = {}; SYS.forEach(s => { COLOR[s] = s === BASE ? "var(--sys-base)" : `var(--series-${OTHERS.indexOf(s) + 1})`; });
+const LABELS = ["supported", "unverified", "contradicted"];  // gray in the middle: it's the neutral answer
+const LABEL_COLOR = { supported: "var(--lab-supported)", unverified: "var(--lab-unverified)", contradicted: "var(--lab-contradicted)" };
+const METRIC_NAME = { sb_correct: "source-backed accuracy", correct: "label accuracy" };
+const REPS = 5000;
+const NS = "http://www.w3.org/2000/svg";
+const state = { slice: "all", type: "all", metric: "sb_correct" };
+
+// ---------- helpers ----------
+function h(tag, attrs = {}, parent, text) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) if (v != null) e.setAttribute(k, v);
+  if (text != null) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function s(tag, attrs = {}, parent, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) if (v != null) e.setAttribute(k, v);
+  if (text != null) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const pct = (x, d = 1) => x == null || isNaN(x) ? "–" : (100 * x).toFixed(d) + "%";
+const pp = x => (x >= 0 ? "+" : "−") + Math.abs(100 * x).toFixed(1) + " pp";
+const fmtP = p => p >= 0.01 ? p.toFixed(2) : p.toExponential(1);
+const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
+const textW = (t, size = 12) => String(t).length * size * 0.56;
+
+// bar with a 4px rounded data-end, square at the baseline (x0)
+function barPath(x0, y, w, hgt, r = 4) {
+  if (!w) return "";
+  const dir = Math.sign(w), aw = Math.abs(w), rr = Math.min(r, aw, hgt / 2), x1 = x0 + w;
+  return dir > 0
+    ? `M${x0},${y}H${x1 - rr}Q${x1},${y} ${x1},${y + rr}V${y + hgt - rr}Q${x1},${y + hgt} ${x1 - rr},${y + hgt}H${x0}Z`
+    : `M${x0},${y}H${x1 + rr}Q${x1},${y} ${x1},${y + rr}V${y + hgt - rr}Q${x1},${y + hgt} ${x1 + rr},${y + hgt}H${x0}Z`;
+}
+function barPathV(x, y0, w, hgt, r = 3) {  // column growing up from baseline y0
+  if (hgt <= 0) return "";
+  const rr = Math.min(r, w / 2, hgt), y1 = y0 - hgt;
+  return `M${x},${y0}V${y1 + rr}Q${x},${y1} ${x + rr},${y1}H${x + w - rr}Q${x + w},${y1} ${x + w},${y1 + rr}V${y0}Z`;
+}
+
+// ---------- tooltip (values lead, labels follow; textContent only) ----------
+const tip = document.getElementById("tip");
+function showTip(evt, title, rows) {
+  tip.replaceChildren();
+  h("div", { class: "t" }, tip, title);
+  for (const r of rows) {
+    const d = h("div", { class: "r" }, tip);
+    if (r.color) h("i", { style: `background:${r.color}` }, d);
+    h("b", {}, d, r.value);
+    if (r.label) h("span", {}, d, r.label);
+  }
+  tip.style.display = "block";
+  let x, y;
+  if (evt.type === "focus") { const b = evt.target.getBoundingClientRect(); x = b.right; y = b.top; }
+  else { x = evt.clientX; y = evt.clientY; }
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  tip.style.left = Math.min(x + 14, innerWidth - tw - 8) + "px";
+  tip.style.top = Math.max(8, Math.min(y + 14, innerHeight - th - 8)) + "px";
+}
+function hideTip() { tip.style.display = "none"; }
+function hover(el, fn) {
+  el.classList.add("mark");
+  el.setAttribute("tabindex", "0");
+  el.addEventListener("pointermove", e => { const [t, r] = fn(); showTip(e, t, r); });
+  el.addEventListener("focus", e => { const [t, r] = fn(); showTip(e, t, r); });
+  el.addEventListener("pointerleave", hideTip);
+  el.addEventListener("blur", hideTip);
+  return el;
+}
+
+// ---------- card with a table-view twin ----------
+function card(id, title, desc, render) {
+  const root = document.getElementById(id);
+  root.replaceChildren();
+  const head = h("div", { class: "card-head" }, root);
+  const t = h("div", {}, head);
+  h("h3", {}, t, title);
+  if (desc) h("div", { class: "desc" }, t, desc);
+  const btn = h("button", { class: "toggle", type: "button", "aria-pressed": "false" }, head, "Table");
+  const body = h("div", {}, root);
+  const out = render(body) || {};
+  if (!out.table) { btn.remove(); return; }
+  const tbl = h("div", { class: "tablewrap", hidden: "" }, root);
+  const T = h("table", { class: "data" }, tbl);
+  const tr = h("tr", {}, h("thead", {}, T));
+  out.table.cols.forEach(c => h("th", {}, tr, c));
+  const tb = h("tbody", {}, T);
+  out.table.rows.forEach(r => { const row = h("tr", {}, tb); r.forEach(c => h("td", {}, row, c)); });
+  btn.addEventListener("click", () => {
+    const on = tbl.hidden; tbl.hidden = !on; body.hidden = on;
+    btn.setAttribute("aria-pressed", String(on)); btn.textContent = on ? "Chart" : "Table";
+  });
+}
+function legend(parent, items, dot = false) {
+  const l = h("div", { class: "legend" }, parent);
+  items.forEach(([name, color]) => { const sp = h("span", {}, l); h("i", { class: dot ? "dot" : "", style: `background:${color}` }, sp); sp.appendChild(document.createTextNode(name)); });
+}
+const sysLegend = (parent, dot) => legend(parent, SYS.map(x => [NAME[x], COLOR[x]]), dot);
+
+// ---------- stats ----------
+let biggest = null;
+{
+  const n = {}; D.claims.forEach(c => n[c.video] = (n[c.video] || 0) + 1);
+  biggest = Object.entries(n).sort((a, b) => b[1] - a[1])[0];
+}
+function slice() {
+  return D.claims.filter(c =>
+    (state.slice === "all" || c.video !== biggest[0]) &&
+    (state.type === "all" || c.types.includes(state.type)));
+}
+const row = (sys, c) => D.rows[sys][c.id];
+function macroF1(cs, sys) {
+  return mean(LABELS.map(l => {
+    let tp = 0, fp = 0, fn = 0;
+    cs.forEach(c => { const p = row(sys, c).pred, g = c.gold; if (p === l && g === l) tp++; else if (p === l) fp++; else if (g === l) fn++; });
+    return tp ? 2 * tp / (2 * tp + fp + fn) : 0;
+  }));
+}
+const acc = (cs, sys, key) => mean(cs.map(c => row(sys, c)[key]));
+function mcnemar(cs, sys, key) {
+  let a = 0, b = 0;
+  cs.forEach(c => { const x = row(sys, c)[key], y = row(BASE, c)[key]; if (x && !y) a++; if (!x && y) b++; });
+  const n = a + b, k = Math.min(a, b);
+  if (!n || a === b) return { a, b, p: 1 };
+  // exact two-sided binomial at p = 0.5 (same as scipy.stats.binomtest)
+  let logC = 0, tail = 0;
+  for (let i = 0; i <= k; i++) { if (i > 0) logC += Math.log((n - i + 1) / i); tail += Math.exp(logC - n * Math.LN2); }
+  return { a, b, p: Math.min(1, 2 * tail) };
+}
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function bootstrap(cs, sys, key) {
+  const byVid = {}; cs.forEach(c => (byVid[c.video] = byVid[c.video] || []).push(c));
+  const vids = Object.keys(byVid), r = rng(7), gaps = new Float64Array(REPS);
+  const per = vids.map(v => { let s1 = 0, s0 = 0; byVid[v].forEach(c => { s1 += row(sys, c)[key]; s0 += row(BASE, c)[key]; }); return [s1, s0, byVid[v].length]; });
+  for (let i = 0; i < REPS; i++) {
+    let s1 = 0, s0 = 0, n = 0;
+    for (let j = 0; j < vids.length; j++) { const p = per[(r() * vids.length) | 0]; s1 += p[0]; s0 += p[1]; n += p[2]; }
+    gaps[i] = n ? (s1 - s0) / n : 0;
+  }
+  const sorted = Array.from(gaps).sort((x, y) => x - y);
+  const q = f => sorted[Math.min(REPS - 1, Math.max(0, Math.round(f * (REPS - 1))))];
+  return { point: acc(cs, sys, key) - acc(cs, BASE, key), lo: q(0.025), hi: q(0.975), gaps: sorted };
+}
+function verdict(m, b) {
+  const agree = m.p < 0.05 && (b.lo > 0 || b.hi < 0);
+  if (!agree) return { cls: "nss", icon: "⬜️", text: "Not significant" };
+  return b.point > 0 ? { cls: "good", icon: "🟢", text: "Real gain" } : { cls: "bad", icon: "▼", text: "Real loss" };
+}
+
+// ---------- generic grouped horizontal bars ----------
+function groupedHBar(body, { groups, series, value, fmt, max = 1, ticks = [0, .25, .5, .75, 1], tickFmt = v => pct(v, 0), refs = [], tipTitle, tipExtra }) {
+  const W = Math.max(380, Math.round(body.clientWidth) || 760), L = Math.min(190, Math.round(W * 0.3)), R = 70, barH = 13, gap = 2, gpad = 18;
+  const gh = series.length * (barH + gap) - gap;
+  const H = 8 + groups.length * (gh + gpad) + 22;
+  const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+  const x = v => L + (W - L - R) * v / max;
+  ticks.forEach(t => { s("line", { x1: x(t), x2: x(t), y1: 4, y2: H - 20, stroke: "var(--grid)" }, svg); s("text", { x: x(t), y: H - 6, class: "tick", "text-anchor": "middle" }, svg, tickFmt(t)); });
+  groups.forEach((g, gi) => {
+    const y0 = 8 + gi * (gh + gpad);
+    s("text", { x: L - 10, y: y0 + gh / 2 - (g.sub ? 2 : -4), class: "lbl", "text-anchor": "end" }, svg, g.label);
+    if (g.sub) s("text", { x: L - 10, y: y0 + gh / 2 + 12, class: "tick", "text-anchor": "end" }, svg, g.sub);
+    refs.filter(r => r.group === g.key).forEach(r => {
+      s("line", { x1: x(r.value), x2: x(r.value), y1: y0 - 3, y2: y0 + gh + 3, stroke: "var(--text-secondary)", "stroke-width": 1.5 }, svg);
+      s("text", { x: x(r.value), y: y0 + gh + 14, class: "tick", "text-anchor": "middle" }, svg, r.label);
+    });
+    series.forEach((sr, si) => {
+      const v = value(g, sr), y = y0 + si * (barH + gap);
+      if (v == null || isNaN(v)) return;
+      const grp = s("g", {}, svg);
+      s("rect", { x: L, y: y - 1, width: W - L, height: barH + 2, class: "hit" }, grp);
+      s("path", { d: barPath(x(0), y, Math.max(x(v) - x(0), v > 0 ? 1.5 : 0), barH), fill: sr.color }, grp);
+      s("text", { x: x(v) + 5, y: y + barH - 3, class: "val" }, grp, fmt(v, g, sr));
+      hover(grp, () => [`${g.label}`, [{ value: fmt(v, g, sr), label: sr.name, color: sr.color }, ...(tipExtra ? tipExtra(g, sr) : [])]]);
+    });
+  });
+  s("line", { x1: x(0), x2: x(0), y1: 4, y2: H - 20, stroke: "var(--axis)" }, svg);
+  return svg;
+}
+const sysSeries = () => SYS.map(x => ({ key: x, name: NAME[x], color: COLOR[x] }));
+
+// ---------- sections ----------
+function renderMeta() {
+  const m = document.getElementById("meta");
+  const n = D.claims.length, v = new Set(D.claims.map(c => c.video)).size;
+  m.textContent = `${n} fact-checker-labeled claims from ${v} videos · model ${M.model} · retrieval ${M.retriever || "–"} · generated ${M.generated}`;
+  const b = document.getElementById("banner");
+  if (M.mock) { const d = h("div", { class: "banner" }, b); h("b", {}, d, "Mock data. "); d.appendChild(document.createTextNode("These numbers come from the offline mock backend (pseudo-random labels), not a real model. They only show that the report works. Run the pipeline with an API key for real results.")); }
+  const types = {}; D.claims.forEach(c => c.types.forEach(t => types[t] = (types[t] || 0) + 1));
+  const sel = document.getElementById("f-type");
+  h("option", { value: "all" }, sel, "All types");
+  Object.entries(types).sort((a, b) => b[1] - a[1]).forEach(([t, k]) => h("option", { value: t }, sel, `${t} (${k})`));
+  document.querySelector('#f-slice option[value="nobig"]').textContent = `Without the largest video (${biggest[1]} claims)`;
+}
+
+function renderKpis(cs, stats) {
+  const k = document.getElementById("kpis"); k.replaceChildren();
+  k.style.gridTemplateColumns = `1.5fr repeat(${SYS.length}, minmax(0, 1fr))`;
+  const key = state.metric;
+  const best = SYS.reduce((a, b) => acc(cs, b, key) > acc(cs, a, key) ? b : a, SYS[0]);
+  const hero = h("div", { class: "card tile hero" }, k);
+  h("div", { class: "label" }, hero, `Best ${METRIC_NAME[key]}`);
+  h("div", { class: "value" }, hero, pct(acc(cs, best, key)));
+  const hd = h("div", { class: "delta" }, hero);
+  hd.textContent = `${NAME[best]} · ${cs.length} claims. Answering "unverified" to everything scores ${pct(mean(cs.map(c => c.gold === "unverified" ? 1 : 0)))}.`;
+  SYS.forEach(x => {
+    const t = h("div", { class: "card tile" }, k);
+    const l = h("div", { class: "label" }, t); h("i", { style: `width:10px;height:10px;border-radius:3px;background:${COLOR[x]};display:inline-block` }, l); l.appendChild(document.createTextNode(NAME[x]));
+    h("div", { class: "value" }, t, pct(acc(cs, x, key)));
+    if (x === BASE) { h("div", { class: "delta" }, t, `label acc ${pct(acc(cs, x, "correct"))} · flip rate ${pct(acc(cs, x, "flip"))}`); return; }
+    const st = stats[x];
+    h("div", { class: "delta" }, t, `${pp(st.boot.point)} vs baseline, 95% CI [${pp(st.boot.lo)}, ${pp(st.boot.hi)}] · McNemar p = ${fmtP(st.mc.p)}`);
+    const v = verdict(st.mc, st.boot);
+    h("span", { class: `verdict ${v.cls}` }, t, `${v.icon} ${v.text}`);
+  });
+}
+
+function renderBoard(cs) {
+  const floor = mean(cs.map(c => c.gold === "unverified" ? 1 : 0));
+  const groups = [
+    { key: "sb_correct", label: "Source-backed accuracy", sub: "headline: right label + backing quote" },
+    { key: "correct", label: "Label accuracy", sub: "citations ignored" },
+    { key: "e2e_correct", label: "End-to-end accuracy", sub: "found the claim + right label" },
+    { key: "f1", label: "Macro-F1", sub: "mean over the 3 labels" },
+    { key: "flip", label: "Flip rate", sub: "lower is better" },
+  ];
+  card("c-board", "Leaderboard", `All metrics on the same ${cs.length} claims. The dark rule marks the floor from answering "unverified" to everything.`, body => {
+    sysLegend(body);
+    const val = (g, sr) => g.key === "f1" ? macroF1(cs, sr.key) : acc(cs, sr.key, g.key);
+    groupedHBar(body, {
+      groups, series: sysSeries(), value: val,
+      fmt: (v, g) => g.key === "f1" ? v.toFixed(3) : pct(v),
+      refs: [{ group: "sb_correct", value: floor, label: `floor ${pct(floor, 0)}` }, { group: "correct", value: floor, label: `floor ${pct(floor, 0)}` }],
+    });
+    return { table: { cols: ["Metric", ...SYS.map(x => NAME[x])], rows: groups.map(g => [g.label, ...SYS.map(x => g.key === "f1" ? macroF1(cs, x).toFixed(3) : pct(acc(cs, x, g.key)))]) } };
+  });
+}
+
+function renderMcnemar(cs, stats) {
+  card("c-mcnemar", "Who wins the disagreements?", `McNemar on ${METRIC_NAME[state.metric]}: only claims where exactly one system was right count. Equal systems would split them like coin flips.`, body => {
+    legend(body, [["only the baseline right", COLOR[BASE]], ...OTHERS.map(x => [`only ${SHORT(x)} right`, COLOR[x]])]);
+    const W = Math.max(380, Math.round(body.clientWidth) || 520), L = 90, R = 80, rowH = 46, H = OTHERS.length * rowH + 24;
+    const mx = Math.max(4, ...OTHERS.map(x => Math.max(stats[x].mc.a, stats[x].mc.b)));
+    const cx = L + (W - L - R) / 2, sc = ((W - L - R) / 2 - 30) / mx;  // 30px left for the count label
+    const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+    OTHERS.forEach((x, i) => {
+      const { a, b, p } = stats[x].mc, y = 6 + i * rowH;
+      s("text", { x: L - 10, y: y + 18, class: "lbl", "text-anchor": "end" }, svg, SHORT(x));
+      const gb = s("g", {}, svg);
+      s("rect", { x: L, y, width: cx - L, height: 26, class: "hit" }, gb);
+      s("path", { d: barPath(cx - 1, y + 4, -(b * sc), 18), fill: COLOR[BASE] }, gb);
+      s("text", { x: cx - b * sc - 6, y: y + 17, class: "val", "text-anchor": "end" }, gb, b);
+      hover(gb, () => [`${SHORT(x)} vs baseline`, [{ value: b, label: "claims only the baseline got right", color: COLOR[BASE] }]]);
+      const ga = s("g", {}, svg);
+      s("rect", { x: cx, y, width: W - R - cx, height: 26, class: "hit" }, ga);
+      s("path", { d: barPath(cx + 1, y + 4, a * sc, 18), fill: COLOR[x] }, ga);
+      s("text", { x: cx + a * sc + 6, y: y + 17, class: "val" }, ga, a);
+      hover(ga, () => [`${SHORT(x)} vs baseline`, [{ value: a, label: `claims only ${SHORT(x)} got right`, color: COLOR[x] }]]);
+      s("text", { x: W - R + 12, y: y + 17, class: "lbl" }, svg, `p = ${fmtP(p)}`);
+    });
+    s("line", { x1: cx, x2: cx, y1: 0, y2: H - 18, stroke: "var(--axis)" }, svg);
+    s("text", { x: cx - 8, y: H - 4, class: "tick", "text-anchor": "end" }, svg, "← baseline wins");
+    s("text", { x: cx + 8, y: H - 4, class: "tick" }, svg, "system wins →");
+    return { table: { cols: ["System", "Only system right", "Only baseline right", "McNemar p"], rows: OTHERS.map(x => [NAME[x], stats[x].mc.a, stats[x].mc.b, fmtP(stats[x].mc.p)]) } };
+  });
+}
+
+function renderGaps(cs, stats) {
+  card("c-gaps", "How big is the gap?", `${METRIC_NAME[state.metric]} minus the baseline's, with a 95% interval from ${REPS.toLocaleString()} resamples of whole videos. An interval crossing zero means the gap could be luck.`, body => {
+    const rowsAll = [];
+    OTHERS.forEach(x => ["sb_correct", "correct"].forEach(k => rowsAll.push({ x, k, b: k === state.metric ? stats[x].boot : bootstrap(cs, x, k) })));
+    const W = 520, L = 170, R = 20, rowH = 34, H = rowsAll.length * rowH + 30;
+    const lim = Math.max(0.1, ...rowsAll.map(r => Math.max(Math.abs(r.b.lo), Math.abs(r.b.hi)))) * 1.1;
+    const x = v => L + (W - L - R) * (v + lim) / (2 * lim);
+    const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+    const step = lim > 0.3 ? 0.2 : 0.1;
+    for (let t = -Math.floor(lim / step) * step; t <= lim + 1e-9; t += step) {
+      s("line", { x1: x(t), x2: x(t), y1: 0, y2: H - 22, stroke: Math.abs(t) < 1e-9 ? "var(--axis)" : "var(--grid)" }, svg);
+      s("text", { x: x(t), y: H - 8, class: "tick", "text-anchor": "middle" }, svg, (t > 1e-9 ? "+" : "") + Math.round(100 * t));
+    }
+    rowsAll.forEach((r, i) => {
+      const y = 12 + i * rowH;
+      s("text", { x: L - 10, y: y + 4, class: "lbl", "text-anchor": "end" }, svg, `${SHORT(r.x)} · ${r.k === "sb_correct" ? "source-backed" : "label"}`);
+      const g = s("g", {}, svg);
+      s("rect", { x: L, y: y - 12, width: W - L - R, height: 24, class: "hit" }, g);
+      s("line", { x1: x(r.b.lo), x2: x(r.b.hi), y1: y, y2: y, stroke: COLOR[r.x], "stroke-width": 2, "stroke-linecap": "round" }, g);
+      [r.b.lo, r.b.hi].forEach(v => s("line", { x1: x(v), x2: x(v), y1: y - 5, y2: y + 5, stroke: COLOR[r.x], "stroke-width": 2, "stroke-linecap": "round" }, g));
+      s("circle", { cx: x(r.b.point), cy: y, r: 5, fill: COLOR[r.x], stroke: "var(--surface-1)", "stroke-width": 2 }, g);
+      hover(g, () => [`${NAME[r.x]}, ${METRIC_NAME[r.k]}`, [{ value: pp(r.b.point), label: "gap vs baseline", color: COLOR[r.x] }, { value: `[${pp(r.b.lo)}, ${pp(r.b.hi)}]`, label: "95% CI" }]]);
+    });
+    s("text", { x: W - R, y: H + 6, class: "tick", "text-anchor": "end" }, svg, "gap vs baseline (pp)");
+    return { table: { cols: ["System", "Metric", "Gap", "95% CI low", "95% CI high"], rows: rowsAll.map(r => [NAME[r.x], METRIC_NAME[r.k], pp(r.b.point), pp(r.b.lo), pp(r.b.hi)]) } };
+  });
+}
+
+function renderBoot(cs, stats) {
+  card("c-boot", "Would the gap survive a different set of videos?", `Each panel stacks ${REPS.toLocaleString()} resampled gaps in ${METRIC_NAME[state.metric]}. The shaded band is the middle 95%; the vertical rule is zero.`, body => {
+    const wrap = h("div", { style: `display:grid;grid-template-columns:repeat(${OTHERS.length},minmax(0,1fr));gap:18px` }, body);
+    const lim = Math.max(0.1, ...OTHERS.flatMap(x => [Math.abs(stats[x].boot.gaps[0]), Math.abs(stats[x].boot.gaps[REPS - 1])]));
+    OTHERS.forEach(x => {
+      const b = stats[x].boot, v = verdict(stats[x].mc, b);
+      const cell = h("div", {}, wrap);
+      const t = h("div", { class: "legend" }, cell); const sp = h("span", {}, t); h("i", { style: `background:${COLOR[x]}` }, sp); sp.appendChild(document.createTextNode(`${NAME[x]}: ${pp(b.point)}, ${v.icon} ${v.text.toLowerCase()}`));
+      const W = Math.max(280, Math.round(cell.clientWidth) || 380), H = 160, L = 8, R = 8, B = 22, nb = 30;
+      const xs = v2 => L + (W - L - R) * (v2 + lim) / (2 * lim);
+      const bw = 2 * lim / nb, counts = new Array(nb).fill(0);
+      b.gaps.forEach(g => counts[Math.min(nb - 1, Math.max(0, Math.floor((g + lim) / bw)))]++);
+      const cmax = Math.max(...counts);
+      const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `Bootstrap distribution for ${NAME[x]}` }, cell);
+      s("rect", { x: xs(b.lo), y: 0, width: Math.max(1, xs(b.hi) - xs(b.lo)), height: H - B, fill: "var(--wash)" }, svg);
+      const pw = (W - L - R) / nb;
+      counts.forEach((c, i) => {
+        if (!c) return;
+        const hh = (H - B - 10) * c / cmax, lo = -lim + i * bw;
+        const g = s("g", {}, svg);
+        s("rect", { x: L + i * pw, y: 0, width: pw, height: H - B, class: "hit" }, g);
+        s("path", { d: barPathV(L + i * pw + 1, H - B, pw - 2, hh, 2), fill: COLOR[x] }, g);
+        hover(g, () => [`gap ${pp(lo)} to ${pp(lo + bw)}`, [{ value: `${c.toLocaleString()} of ${REPS.toLocaleString()}`, label: "resamples", color: COLOR[x] }]]);
+      });
+      s("line", { x1: L, x2: W - R, y1: H - B, y2: H - B, stroke: "var(--axis)" }, svg);
+      s("line", { x1: xs(0), x2: xs(0), y1: 0, y2: H - B, stroke: "var(--text-secondary)", "stroke-width": 1.5 }, svg);
+      [[-lim, "start"], [0, "middle"], [lim, "end"]].forEach(([v2, a]) => s("text", { x: xs(v2), y: H - 6, class: "tick", "text-anchor": a }, svg, (v2 > 0 ? "+" : "") + Math.round(100 * v2) + " pp"));
+    });
+    return { table: { cols: ["System", "Gap", "2.5th percentile", "Median", "97.5th percentile"], rows: OTHERS.map(x => { const g = stats[x].boot.gaps; return [NAME[x], pp(stats[x].boot.point), pp(stats[x].boot.lo), pp(g[REPS >> 1]), pp(stats[x].boot.hi)]; }) } };
+  });
+}
+
+function renderConfusion(cs) {
+  card("c-confusion", "What each system answers, by the fact-checker's label", "Rows are the fact-checker's label, columns the system's. The diagonal is correct. Shade = share of the row.", body => {
+    const wrap = h("div", { style: `display:grid;grid-template-columns:repeat(${SYS.length},minmax(0,1fr));gap:20px` }, body);
+    const tableRows = [];
+    SYS.forEach(x => {
+      const cell = h("div", {}, wrap);
+      const t = h("div", { class: "legend" }, cell); const sp = h("span", {}, t); h("i", { style: `background:${COLOR[x]}` }, sp); sp.appendChild(document.createTextNode(NAME[x]));
+      const W = 330, L = 92, T = 34, cw = (W - L) / 3, ch = 44, H = T + 3 * ch + 4;
+      const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, cell);
+      LABELS.forEach((p, j) => s("text", { x: L + j * cw + cw / 2, y: T - 8, class: "tick", "text-anchor": "middle" }, svg, p));
+      s("text", { x: L + 1.5 * cw, y: 10, class: "tick", "text-anchor": "middle" }, svg, "system says →");
+      LABELS.forEach((g, i) => {
+        const inRow = cs.filter(c => c.gold === g);
+        s("text", { x: L - 8, y: T + i * ch + ch / 2 + 4, class: "lbl", "text-anchor": "end" }, svg, `${g} (${inRow.length})`);
+        LABELS.forEach((p, j) => {
+          const n = inRow.filter(c => row(x, c).pred === p).length, share = inRow.length ? n / inRow.length : 0;
+          const step = n ? Math.min(7, 1 + Math.floor(share * 6.999)) : 0;
+          const grp = s("g", {}, svg);
+          s("rect", { x: L + j * cw + 1, y: T + i * ch + 1, width: cw - 2, height: ch - 2, rx: 4, fill: step ? `var(--seq-${step})` : "var(--page)" }, grp);
+          if (i === j) s("rect", { x: L + j * cw + 2.5, y: T + i * ch + 2.5, width: cw - 5, height: ch - 5, rx: 3, fill: "none", stroke: "var(--text-primary)", "stroke-width": 1, "stroke-opacity": .35 }, grp);
+          const dark = document.documentElement.dataset.theme === "dark" || (document.documentElement.dataset.theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+          const light = dark ? step <= 4 : step >= 4;
+          s("text", { x: L + j * cw + cw / 2, y: T + i * ch + ch / 2 + 4, "text-anchor": "middle", style: `font-size:12px;font-variant-numeric:tabular-nums;fill:${step ? (light ? "#ffffff" : "#0b0b0b") : "var(--text-muted)"}` }, grp, n);
+          hover(grp, () => [`${NAME[x]}`, [{ value: `${n} claims (${pct(share, 0)} of row)`, label: `fact-checker: ${g} → system: ${p}` }]]);
+          tableRows.push([NAME[x], g, p, n, pct(share, 0)]);
+        });
+      });
+    });
+    return { table: { cols: ["System", "Fact-checker label", "System label", "Claims", "Share of row"], rows: tableRows } };
+  });
+}
+
+function renderMix(cs) {
+  card("c-mix", "Label mix", "How often each system says each label, next to the fact-checkers. A system that leans on \"unverified\" gets abstentions for free.", body => {
+    legend(body, LABELS.map(l => [l, LABEL_COLOR[l]]));
+    const rowsDef = [{ name: "Fact-checkers", get: c => c.gold }, ...SYS.map(x => ({ name: SHORT(x), full: NAME[x], get: c => row(x, c).pred }))];
+    const W = 520, L = 100, R = 10, bh = 20, rh = 34, H = rowsDef.length * rh + 6;
+    const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+    const tableRows = [];
+    rowsDef.forEach((r, i) => {
+      const y = 6 + i * rh;
+      s("text", { x: L - 10, y: y + bh / 2 + 4, class: "lbl", "text-anchor": "end", style: i === 0 ? "font-weight:600" : null }, svg, r.name);
+      let x0 = L;
+      const counts = LABELS.map(l => cs.filter(c => r.get(c) === l).length);
+      const total = cs.length || 1;
+      LABELS.forEach((l, j) => {
+        const w = (W - L - R) * counts[j] / total;
+        if (w <= 0) return;
+        const g = s("g", {}, svg);
+        const ww = Math.max(0, w - (x0 + w >= W - R - 0.5 ? 0 : 2));  // 2px surface gap between segments
+        s("rect", { x: x0, y, width: ww, height: bh, rx: 3, fill: LABEL_COLOR[l] }, g);
+        const lab = pct(counts[j] / total, 0);
+        if (ww > textW(lab, 11) + 10) s("text", { x: x0 + ww / 2, y: y + bh / 2 + 4, "text-anchor": "middle", style: `font-size:11px;fill:${l === "unverified" ? "#0b0b0b" : "#ffffff"}` }, g, lab);
+        hover(g, () => [r.full || r.name, [{ value: `${counts[j]} claims (${lab})`, label: l, color: LABEL_COLOR[l] }]]);
+        x0 += w;
+      });
+      tableRows.push([r.full || r.name, ...counts.map(n => `${n} (${pct(n / total, 0)})`)]);
+    });
+    return { table: { cols: ["Who", ...LABELS], rows: tableRows } };
+  });
+}
+
+function renderByGold(cs) {
+  const key = state.metric;
+  card("c-bygold", `${METRIC_NAME[key][0].toUpperCase() + METRIC_NAME[key].slice(1)} by the fact-checker's label`, "Which kind of claim each system handles. Retrieval should help most on claims that are actually true or false.", body => {
+    sysLegend(body);
+    const groups = LABELS.map(l => ({ key: l, label: l, sub: `${cs.filter(c => c.gold === l).length} claims` }));
+    groupedHBar(body, { groups, series: sysSeries(), value: (g, sr) => acc(cs.filter(c => c.gold === g.key), sr.key, key), fmt: v => pct(v, 0) });
+    return { table: { cols: ["Fact-checker label", "Claims", ...SYS.map(x => NAME[x])], rows: groups.map(g => [g.label, g.sub, ...SYS.map(x => pct(acc(cs.filter(c => c.gold === g.key), x, key)))]) } };
+  });
+}
+
+function renderFunnel(cs) {
+  card("c-funnel", "Citation funnel", "Every citation must pass three checks in order. Closed-book URLs are fetched live; retrieval citations point at passages the system was given, so they always resolve.", body => {
+    sysLegend(body);
+    const stages = [
+      { key: "made", label: "Citations given", f: c => true },
+      { key: "resolves", label: "Source resolves", f: c => c.resolves },
+      { key: "found", label: "Quote is in the source", f: c => c.quote_found },
+      { key: "ok", label: "Judge: quote backs the label", f: c => c.ok },
+    ];
+    const count = (x, st) => cs.reduce((n, c) => n + row(x, c).cites.filter(st.f).length, 0);
+    const mx = Math.max(1, ...SYS.map(x => count(x, stages[0])));
+    const step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500].find(st => mx / st <= 6) || 1000;
+    const nice = Math.ceil(mx / step) * step;
+    const ticks = Array.from({ length: nice / step + 1 }, (_, i) => i * step);
+    groupedHBar(body, {
+      groups: stages, series: sysSeries(), value: (g, sr) => count(sr.key, g), max: nice, ticks, tickFmt: v => String(Math.round(v)),
+      fmt: (v, g, sr) => g.key === "made" ? String(v) : `${v} (${pct(v / Math.max(1, count(sr.key, stages[0])), 0)})`,
+    });
+    return { table: { cols: ["Stage", ...SYS.map(x => NAME[x])], rows: stages.map(st => [st.label, ...SYS.map(x => count(x, st))]) } };
+  });
+}
+
+function renderCost(cs) {
+  const key = state.metric;
+  const costOf = x => D.usage[x] || {};
+  const anyCost = SYS.some(x => costOf(x).cost_usd > 0), anyTok = SYS.some(x => costOf(x).prompt_tokens > 0);
+  const xName = anyCost ? "cost for the full test set (USD)" : anyTok ? "tokens used (millions)" : "model calls";
+  const xv = x => { const u = costOf(x); return anyCost ? u.cost_usd : anyTok ? (u.prompt_tokens + u.completion_tokens) / 1e6 : u.calls || 0; };
+  card("c-cost", "What the accuracy costs", `${METRIC_NAME[key]} against ${xName}, measured on the run that produced these rows (all claims, before filters).`, body => {
+    sysLegend(body, true);
+    const W = 520, L = 46, R = 24, T = 14, B = 34, H = 250;
+    const xmax = Math.max(...SYS.map(xv)) * 1.15 || 1;
+    const ys = SYS.map(x => acc(cs, x, key));
+    const ymax = Math.min(1, Math.max(0.5, ...ys) + 0.1);
+    const X = v => L + (W - L - R) * v / xmax, Y = v => H - B - (H - B - T) * v / ymax;
+    const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+    for (let t = 0; t <= ymax + 1e-9; t += 0.1) { s("line", { x1: L, x2: W - R, y1: Y(t), y2: Y(t), stroke: "var(--grid)" }, svg); if (Math.round(t * 10) % 2 === 0) s("text", { x: L - 6, y: Y(t) + 4, class: "tick", "text-anchor": "end" }, svg, pct(t, 0)); }
+    s("line", { x1: L, x2: W - R, y1: Y(0), y2: Y(0), stroke: "var(--axis)" }, svg);
+    [0, .25, .5, .75, 1].forEach(f => s("text", { x: X(f * xmax), y: H - B + 16, class: "tick", "text-anchor": "middle" }, svg, anyCost ? "$" + (f * xmax).toFixed(2) : (f * xmax).toFixed(anyTok ? 2 : 0)));
+    s("text", { x: W - R, y: H - 2, class: "tick", "text-anchor": "end" }, svg, xName);
+    SYS.forEach((x, i) => {
+      const g = s("g", {}, svg), cx = X(xv(x)), cy = Y(ys[i]);
+      s("circle", { cx, cy, r: 14, class: "hit" }, g);
+      s("circle", { cx, cy, r: 6, fill: COLOR[x], stroke: "var(--surface-1)", "stroke-width": 2 }, g);
+      const right = cx < W - 120;
+      s("text", { x: cx + (right ? 11 : -11), y: cy + 4 + (i % 2 ? 14 : -8) * (SYS.some((z, j) => j !== i && Math.abs(Y(ys[j]) - cy) < 16) ? 1 : 0), class: "lbl", "text-anchor": right ? "start" : "end" }, g, SHORT(x));
+      hover(g, () => [NAME[x], [{ value: pct(ys[i]), label: METRIC_NAME[key], color: COLOR[x] }, { value: anyCost ? "$" + xv(x).toFixed(2) : String(+xv(x).toFixed(3)), label: xName }]]);
+    });
+    return { table: { cols: ["System", METRIC_NAME[key], xName], rows: SYS.map((x, i) => [NAME[x], pct(ys[i]), anyCost ? "$" + xv(x).toFixed(2) : xv(x)]) } };
+  });
+}
+
+function renderByType(cs) {
+  const key = state.metric;
+  card("c-bytype", `${METRIC_NAME[key][0].toUpperCase() + METRIC_NAME[key].slice(1)} by claim type`, "AVeriTeC's claim types; a claim can have more than one. Types with fewer than 3 claims are left out.", body => {
+    sysLegend(body);
+    const types = {}; cs.forEach(c => c.types.forEach(t => (types[t] = types[t] || []).push(c)));
+    const groups = Object.entries(types).filter(([, v]) => v.length >= 3).sort((a, b) => b[1].length - a[1].length).map(([t, v]) => ({ key: t, label: t.replace(" Claim", ""), sub: `${v.length} claims`, cs: v }));
+    if (!groups.length) { h("div", { class: "desc" }, body, "No claim type has 3 or more claims in this slice."); return; }
+    groupedHBar(body, { groups, series: sysSeries(), value: (g, sr) => acc(g.cs, sr.key, key), fmt: v => pct(v, 0) });
+    return { table: { cols: ["Claim type", "Claims", ...SYS.map(x => NAME[x])], rows: groups.map(g => [g.key, g.cs.length, ...SYS.map(x => pct(acc(g.cs, x, key)))]) } };
+  });
+}
+
+function renderExtract(cs) {
+  card("c-extract", "Can the model find the claims itself?", "All systems share one extraction step. Recall = share of the fact-checker's claims the model pulled out of the transcript; end-to-end also needs the right label on its own wording.", body => {
+    const rec = acc(cs, BASE, "matched");
+    const t = h("div", { style: "display:flex;gap:28px;align-items:flex-end;margin:4px 0 12px" }, body);
+    const a = h("div", { class: "tile" }, t); h("div", { class: "label" }, a, "Extraction recall (shared)"); h("div", { class: "value" }, a, pct(rec));
+    h("div", { class: "delta" }, a, `${cs.filter(c => row(BASE, c).matched).length} of ${cs.length} claims found`);
+    // meter: recall against a same-ramp track
+    const W = 520, H = 18, svg = s("svg", { viewBox: `0 0 ${W} ${H + 4}`, role: "img", "aria-label": `Extraction recall ${pct(rec)}` }, body);
+    s("rect", { x: 0, y: 2, width: W, height: H, rx: 4, fill: "var(--seq-1)" }, svg);
+    s("path", { d: barPath(0, 2, Math.max(2, W * rec), H), fill: "var(--seq-5)" }, svg);
+    h("div", { class: "desc", style: "margin-top:14px" }, body, "End-to-end accuracy (found it AND labeled it right):");
+    groupedHBar(body, { groups: [{ key: "e2e", label: "End-to-end" }], series: sysSeries(), value: (g, sr) => acc(cs, sr.key, "e2e_correct"), fmt: v => pct(v), ticks: [0, .25, .5, .75, 1] });
+    return { table: { cols: ["System", "Extraction recall", "End-to-end accuracy"], rows: SYS.map(x => [NAME[x], pct(rec), pct(acc(cs, x, "e2e_correct"))]) } };
+  });
+}
+
+function renderVideo(cs) {
+  const key = state.metric;
+  card("c-video", `${METRIC_NAME[key][0].toUpperCase() + METRIC_NAME[key].slice(1)} per video`, "One row per source video, most claims first. The bootstrap resamples these rows, which is why one big video can swing the result: try the \"Without the largest video\" filter.", body => {
+    sysLegend(body, true);
+    const by = {}; cs.forEach(c => (by[c.video] = by[c.video] || []).push(c));
+    const vids = Object.entries(by).sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+    const W = 1160, L = 300, R = 30, rh = 24, T = 6, H = T + vids.length * rh + 26;
+    const X = v => L + (W - L - R) * v;
+    const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+    [0, .25, .5, .75, 1].forEach(t => { s("line", { x1: X(t), x2: X(t), y1: 0, y2: H - 22, stroke: "var(--grid)" }, svg); s("text", { x: X(t), y: H - 6, class: "tick", "text-anchor": "middle" }, svg, pct(t, 0)); });
+    const tableRows = [];
+    vids.forEach(([v, list], i) => {
+      const y = T + i * rh + rh / 2;
+      const spk = list[0].speaker || "unknown speaker";
+      s("line", { x1: L, x2: W - R, y1: y, y2: y, stroke: "var(--grid)" }, svg);
+      const a = s("a", { href: list[0].url, target: "_blank", rel: "noopener" }, svg);
+      s("text", { x: L - 12, y: y + 4, class: "lbl", "text-anchor": "end" }, a, `${spk.length > 34 ? spk.slice(0, 33) + "…" : spk} · ${list.length} claim${list.length > 1 ? "s" : ""}`);
+      SYS.forEach((x, si) => {
+        const val = acc(list, x, key);
+        const g = s("g", {}, svg), cx = X(val), cy = y + (si - (SYS.length - 1) / 2) * 5;
+        s("circle", { cx, cy, r: 12, class: "hit" }, g);
+        s("circle", { cx, cy, r: 5, fill: COLOR[x], stroke: "var(--surface-1)", "stroke-width": 2 }, g);
+        hover(g, () => [`${spk} (${v.replace("yt:", "")})`, SYS.map(z => ({ value: pct(acc(list, z, key), 0), label: NAME[z], color: COLOR[z] }))]);
+      });
+      tableRows.push([spk, v.replace("yt:", ""), list.length, ...SYS.map(x => pct(acc(list, x, key), 0))]);
+    });
+    return { table: { cols: ["Speaker", "Video", "Claims", ...SYS.map(x => NAME[x])], rows: tableRows } };
+  });
+}
+
+function renderClaims(cs) {
+  card("c-claims", "Claim explorer", "Click a row to see each system's rationale and citations. ✓ = label matches the fact-checker; ⓒ = a citation passed every check.", body => {
+    const bar = h("div", { class: "toolbar" }, body);
+    const q = h("input", { type: "search", placeholder: "Search claims or speakers", "aria-label": "Search claims" }, bar);
+    const show = h("select", { "aria-label": "Which claims" }, bar);
+    [["all", "All claims"], ["disagree", "Systems disagree"], ["basewrong", "Baseline wrong"], ...OTHERS.map(x => [`win:${x}`, `${SHORT(x)} right, baseline wrong`]), ["flip", "Any supported ↔ contradicted flip"]]
+      .forEach(([v, t]) => h("option", { value: v }, show, t));
+    const count = h("span", { class: "sub", style: "align-self:center" }, bar);
+    const wrap = h("div", { class: "tablewrap", style: "max-height:640px" }, body);
+    const T = h("table", { class: "data" }, wrap);
+    const hr = h("tr", {}, h("thead", {}, T));
+    ["Claim", "Fact-checker", ...SYS.map(SHORT)].forEach(c => h("th", {}, hr, c));
+    const tb = h("tbody", {}, T);
+    const chip = (parent, label, extra) => { const c = h("span", { class: "chip" }, parent); h("span", { class: "sw", style: `background:${LABEL_COLOR[label]}` }, c); c.appendChild(document.createTextNode(label)); if (extra) extra(c); return c; };
+    function draw() {
+      tb.replaceChildren();
+      const needle = q.value.trim().toLowerCase(), mode = show.value;
+      const list = cs.filter(c => {
+        if (needle && !(c.claim + " " + c.speaker).toLowerCase().includes(needle)) return false;
+        const preds = SYS.map(x => row(x, c).pred);
+        if (mode === "disagree") return new Set(preds).size > 1;
+        if (mode === "basewrong") return !row(BASE, c).correct;
+        if (mode === "flip") return SYS.some(x => row(x, c).flip);
+        if (mode.startsWith("win:")) { const x = mode.slice(4); return row(x, c).correct && !row(BASE, c).correct; }
+        return true;
+      });
+      count.textContent = `${list.length} of ${cs.length}`;
+      list.forEach(c => {
+        const tr = h("tr", { class: "claim", tabindex: "0", "aria-expanded": "false" }, tb);
+        const td = h("td", {}, tr); h("div", {}, td, c.claim); h("div", { class: "muted", style: "font-size:11.5px" }, td, `${c.speaker || "unknown"} · ${c.date || ""} · ${c.gold_raw}`);
+        chip(h("td", {}, tr), c.gold);
+        SYS.forEach(x => {
+          const r = row(x, c);
+          chip(h("td", {}, tr), r.pred, el => {
+            h("span", { class: r.correct ? "ok" : "no", title: r.correct ? "label correct" : "label wrong" }, el, r.correct ? " ✓" : " ✗");
+            if (r.cites.some(z => z.ok)) h("span", { class: "ok", title: "a citation passed every check" }, el, " ⓒ");
+          });
+        });
+        const det = h("tr", { class: "detail", hidden: "" }, tb);
+        const dtd = h("td", { colspan: String(2 + SYS.length) }, det);
+        const a = h("a", { href: c.url, target: "_blank", rel: "noopener" }, h("div", { style: "margin-bottom:8px" }, dtd), "Open the clip on YouTube ↗");
+        const grid = h("div", { class: "detail-grid" }, dtd);
+        SYS.forEach(x => {
+          const r = row(x, c), col = h("div", {}, grid);
+          const hd = h("h4", {}, col); h("span", { style: `width:10px;height:10px;border-radius:3px;background:${COLOR[x]};display:inline-block` }, hd); hd.appendChild(document.createTextNode(`${NAME[x]}: ${r.pred}`));
+          h("div", {}, col, r.rationale || "(no rationale)");
+          if (!r.cites.length) h("div", { class: "muted", style: "margin-top:4px" }, col, "No citations.");
+          r.cites.forEach(z => {
+            const ci = h("div", { class: "cite" }, col);
+            h("div", {}, ci, `“${z.quote}”`);
+            const m = h("div", { class: "muted" }, ci);
+            m.appendChild(document.createTextNode((z.url || "").replace(/^https?:\/\/(www\.)?/, "").slice(0, 70) + " · "));
+            [["resolves", z.resolves], ["quote found", z.quote_found], ["backs label", z.backs]].forEach(([n, ok], i) => { h("span", { class: ok ? "ok" : "no" }, m, `${ok ? "✓" : "✗"} ${n}`); if (i < 2) m.appendChild(document.createTextNode("  ")); });
+          });
+        });
+        const toggle = () => { det.hidden = !det.hidden; tr.setAttribute("aria-expanded", String(!det.hidden)); };
+        tr.addEventListener("click", e => { if (e.target.closest("a")) return; toggle(); });
+        tr.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+      });
+    }
+    q.addEventListener("input", draw); show.addEventListener("change", draw); draw();
+  });
+}
+
+// ---------- wiring ----------
+function renderAll() {
+  const cs = slice();
+  document.getElementById("f-count").textContent = `${cs.length} claims · ${new Set(cs.map(c => c.video)).size} videos`;
+  const stats = {};
+  OTHERS.forEach(x => { stats[x] = { mc: mcnemar(cs, x, state.metric), boot: bootstrap(cs, x, state.metric) }; });
+  if (!cs.length) { document.getElementById("kpis").textContent = "No claims in this slice."; return; }
+  renderKpis(cs, stats); renderBoard(cs); renderMcnemar(cs, stats); renderGaps(cs, stats); renderBoot(cs, stats);
+  renderConfusion(cs); renderMix(cs); renderByGold(cs); renderFunnel(cs); renderCost(cs);
+  renderByType(cs); renderExtract(cs); renderVideo(cs); renderClaims(cs);
+}
+renderMeta();
+document.getElementById("f-slice").addEventListener("change", e => { state.slice = e.target.value; renderAll(); });
+document.getElementById("f-type").addEventListener("change", e => { state.type = e.target.value; renderAll(); });
+document.querySelectorAll("#f-metric button").forEach(b => b.addEventListener("click", () => {
+  state.metric = b.dataset.v;
+  document.querySelectorAll("#f-metric button").forEach(o => o.setAttribute("aria-pressed", String(o === b)));
+  renderAll();
+}));
+document.getElementById("theme").addEventListener("click", () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+  renderAll();  // heat-cell label ink depends on the theme
+});
+renderAll();
+</script>
+</body>
+</html>

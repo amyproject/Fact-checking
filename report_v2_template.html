@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Short-video fact-checking v2: iterating an open model past frontier models</title>
+<style>
+.viz-root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface-1: #fcfcfb;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --sys-base: #898781;
+  --lab-supported: #2a78d6; --lab-unverified: #a3a29a; --lab-contradicted: #e34948;
+  --div-neg: #e34948; --div-mid: #f0efec; --div-pos: #2a78d6;
+  --wash: rgba(42,120,214,0.10); --good-text: #006300; --bad-text: #b3261e; --warn: #fab219;
+  --seq-1: #cde2fb; --seq-2: #9ec5f4; --seq-3: #6da7ec; --seq-4: #3987e5; --seq-5: #256abf; --seq-6: #184f95; --seq-7: #0d366b;
+  --mark-bg: rgba(250,178,25,0.35);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface-1: #1a1a19;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --sys-base: #8a8984;
+    --lab-supported: #3987e5; --lab-unverified: #6b6a64; --lab-contradicted: #e66767;
+    --div-neg: #e66767; --div-mid: #383835; --div-pos: #3987e5;
+    --wash: rgba(57,135,229,0.14); --good-text: #0ca30c; --bad-text: #e66767;
+    --seq-1: #104281; --seq-2: #184f95; --seq-3: #1c5cab; --seq-4: #256abf; --seq-5: #3987e5; --seq-6: #6da7ec; --seq-7: #b7d3f6;
+    --mark-bg: rgba(250,178,25,0.28);
+  }
+}
+:root[data-theme="dark"] .viz-root {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface-1: #1a1a19;
+  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --sys-base: #8a8984;
+  --lab-supported: #3987e5; --lab-unverified: #6b6a64; --lab-contradicted: #e66767;
+  --div-neg: #e66767; --div-mid: #383835; --div-pos: #3987e5;
+  --wash: rgba(57,135,229,0.14); --good-text: #0ca30c; --bad-text: #e66767;
+  --seq-1: #104281; --seq-2: #184f95; --seq-3: #1c5cab; --seq-4: #256abf; --seq-5: #3987e5; --seq-6: #6da7ec; --seq-7: #b7d3f6;
+  --mark-bg: rgba(250,178,25,0.28);
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+.viz-root { font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--page); color: var(--text-primary); min-height: 100vh; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 0 32px 72px; }
+.top { position: sticky; top: 0; z-index: 10; background: var(--page); border-bottom: 1px solid var(--grid); }
+.top .wrap { padding-top: 14px; padding-bottom: 0; }
+.titlebar { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+h1 { font-size: 21px; font-weight: 600; margin: 0 0 2px; }
+.sub { color: var(--text-secondary); font-size: 13px; }
+.muted { color: var(--text-muted); }
+nav.tabs { display: flex; gap: 2px; margin-top: 10px; flex-wrap: wrap; }
+nav.tabs button { border: 0; background: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 8px 12px; font-weight: 500; color: var(--text-secondary); }
+nav.tabs button[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--text-primary); }
+nav.tabs button:hover { background: none; color: var(--text-primary); }
+section.tab { display: none; padding-top: 18px; }
+section.tab.on { display: block; }
+h2 { font-size: 17px; font-weight: 600; margin: 34px 0 8px; }
+h3 { font-size: 14px; font-weight: 600; margin: 0; }
+h4 { font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+p { margin: 6px 0 10px; max-width: 880px; }
+.prose li { margin: 3px 0; max-width: 860px; }
+.banner { border: 1px solid var(--border); background: var(--surface-1); border-left: 4px solid var(--warn); padding: 10px 14px; border-radius: 8px; margin: 14px 0 4px; font-size: 13px; }
+.callout { border-left: 3px solid var(--axis); padding: 6px 12px; margin: 10px 0; color: var(--text-secondary); background: var(--surface-1); border-radius: 0 8px 8px 0; max-width: 900px; }
+.filters { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding: 8px 0 12px; border-bottom: 1px solid var(--grid); margin-bottom: 6px; position: sticky; top: 92px; background: var(--page); z-index: 6; }
+.filters label { font-size: 12px; color: var(--text-secondary); display: flex; gap: 7px; align-items: center; }
+select, button, input[type=search] { font: inherit; font-size: 13px; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px; }
+button { cursor: pointer; }
+button:hover, select:hover { background: var(--grid); }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; }
+.seg button[aria-pressed="true"] { background: var(--text-primary); color: var(--surface-1); }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid .wide { grid-column: 1 / -1; }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px 14px; min-width: 0; scroll-margin-top: 150px; }
+.card.flash { box-shadow: 0 0 0 3px var(--warn); transition: box-shadow .3s; }
+.card-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.card .desc { color: var(--text-secondary); font-size: 12.5px; margin: 3px 0 10px; }
+.card .toggle { font-size: 12px; padding: 3px 8px; white-space: nowrap; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--text-secondary); margin: 2px 0 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.legend i.dot { border-radius: 50%; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+.tick { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+.lbl { font-size: 12px; fill: var(--text-secondary); }
+.lbl-strong { font-size: 12px; fill: var(--text-primary); font-weight: 600; }
+.val { font-size: 11px; fill: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.mark { outline: none; transition: opacity .12s; }
+.mark:hover, .mark:focus { opacity: .78; }
+.hit { fill: transparent; }
+.kpis { display: grid; gap: 16px; grid-template-columns: 1.5fr repeat(3, minmax(0, 1fr)); }
+@media (max-width: 900px) { .kpis { grid-template-columns: 1fr; } }
+.tile .label { font-size: 12.5px; color: var(--text-secondary); display: flex; align-items: center; gap: 7px; }
+.tile .value { font-size: 30px; font-weight: 600; margin: 4px 0 2px; }
+.tile.hero .value { font-size: 50px; line-height: 1.05; }
+.tile .delta { font-size: 12.5px; color: var(--text-secondary); }
+.verdict { display: inline-flex; gap: 5px; align-items: center; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 8px; border: 1px solid var(--border); white-space: nowrap; }
+.verdict.good { color: var(--good-text); }
+.verdict.bad { color: var(--bad-text); }
+.verdict.nss { color: var(--text-secondary); }
+table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.data th { text-align: left; font-weight: 600; color: var(--text-secondary); border-bottom: 1px solid var(--axis); padding: 6px 8px; position: sticky; top: 0; background: var(--surface-1); vertical-align: bottom; }
+table.data td { border-bottom: 1px solid var(--grid); padding: 6px 8px; vertical-align: top; font-variant-numeric: tabular-nums; }
+.tablewrap { max-height: 460px; overflow: auto; }
+.chip { display: inline-flex; gap: 5px; align-items: center; white-space: nowrap; font-size: 12px; }
+.chip .sw { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.tag { display: inline-block; font-size: 11.5px; border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; margin: 2px 4px 2px 0; color: var(--text-secondary); background: var(--page); }
+.ok { color: var(--good-text); font-weight: 600; }
+.no { color: var(--bad-text); font-weight: 600; }
+.na { color: var(--text-muted); }
+.status { font-size: 11.5px; font-weight: 600; border-radius: 4px; padding: 1px 6px; border: 1px solid var(--border); white-space: nowrap; }
+.status.built, .status.data { color: var(--good-text); }
+.status.untested { color: var(--text-secondary); }
+.status.planned { color: var(--text-muted); }
+.status.rejected { color: var(--bad-text); }
+/* claims tab */
+.claims-layout { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1000px) { .claims-layout { grid-template-columns: 1fr; } }
+.claim-list { max-height: calc(100vh - 220px); overflow: auto; position: sticky; top: 150px; }
+.claim-item { padding: 9px 10px; border-bottom: 1px solid var(--grid); cursor: pointer; border-radius: 6px; }
+.claim-item:hover { background: var(--page); }
+.claim-item[aria-selected="true"] { background: var(--page); box-shadow: inset 3px 0 0 var(--text-primary); }
+.claim-item .t { font-size: 13px; }
+.claim-item .m { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+.detail h2 { margin-top: 0; font-size: 18px; }
+.transcript { font-size: 13px; line-height: 1.7; color: var(--text-secondary); max-height: 220px; overflow: auto; border: 1px solid var(--grid); border-radius: 8px; padding: 10px 12px; background: var(--page); }
+.transcript mark { background: var(--mark-bg); color: var(--text-primary); border-radius: 2px; padding: 0 1px; }
+.trail { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.trail div { border: 1px solid var(--grid); border-radius: 8px; padding: 8px 10px; background: var(--page); font-size: 12.5px; }
+.trail b { display: block; font-size: 11.5px; color: var(--text-muted); font-weight: 500; }
+.items-grid { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 3px; margin-top: 6px; }
+.items-grid span { font-size: 10.5px; text-align: center; border-radius: 3px; padding: 2px 0; border: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+.items-grid span.p { background: var(--seq-2); color: #0b0b0b; border-color: transparent; }
+.items-grid span.f { background: var(--div-neg); color: #fff; border-color: transparent; }
+.cite { margin: 4px 0 0; padding-left: 8px; border-left: 2px solid var(--grid); color: var(--text-secondary); word-break: break-word; font-size: 12px; }
+details > summary { cursor: pointer; color: var(--text-secondary); font-size: 12.5px; }
+.flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.flow .step { border: 1px solid var(--border); background: var(--surface-1); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; max-width: 210px; }
+.flow .step b { display: block; font-size: 12.5px; }
+.flow .arrow { color: var(--text-muted); }
+#tip { position: fixed; pointer-events: none; z-index: 30; background: var(--surface-1); border: 1px solid var(--border); box-shadow: 0 6px 20px rgba(0,0,0,.14); border-radius: 8px; padding: 8px 10px; font-size: 12px; min-width: 150px; max-width: 340px; display: none; }
+#tip .t { color: var(--text-secondary); margin-bottom: 4px; }
+#tip .r { display: flex; align-items: center; gap: 7px; margin-top: 2px; }
+#tip .r b { font-weight: 600; font-variant-numeric: tabular-nums; }
+#tip .r i { width: 12px; height: 2px; display: inline-block; border-radius: 1px; flex: none; }
+#tip .r span { color: var(--text-secondary); }
+a { color: inherit; }
+code { font-size: 12px; background: var(--grid); padding: 1px 4px; border-radius: 4px; }
+</style>
+<style>
+.viz-root { --lab4-supported: #2a78d6; --lab4-refuted: #e34948; --lab4-conflicting: #1baf7a; --lab4-nee: #a3a29a; }
+:root[data-theme="dark"] .viz-root { --lab4-supported: #3987e5; --lab4-refuted: #e66767; --lab4-conflicting: #199e70; --lab4-nee: #6b6a64; }
+.mini-flow { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.mini-flow span.b { border: 1px solid var(--border); background: var(--page); border-radius: 6px; padding: 2px 7px; font-size: 11.5px; }
+.mini-flow span.a { color: var(--text-muted); font-size: 11px; }
+.round { border-left: 3px solid var(--axis); padding: 4px 0 4px 12px; margin: 10px 0; }
+.round.met { border-left-color: var(--good-text); }
+.diagram svg text { font-size: 12px; }
+.pill { display: inline-block; font-size: 11px; border-radius: 999px; padding: 1px 7px; border: 1px solid var(--border); margin-right: 4px; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<div class="viz-root">
+<div class="top"><div class="wrap">
+  <div class="titlebar">
+    <div>
+      <h1>Short-video fact-checking v2: more claims, a harder task, and an open model iterated against frontier models</h1>
+      <div class="sub" id="meta"></div>
+    </div>
+    <button id="theme" type="button">Light / dark</button>
+  </div>
+  <nav class="tabs" role="tablist" id="tabs"></nav>
+</div></div>
+<div class="wrap">
+<div id="banner"></div>
+
+<section class="tab" id="tab-overview" data-title="Overview">
+  <p id="tldr" style="font-size:15px"></p>
+  <div class="kpis" id="ov-kpis"></div>
+  <h2>What changed from v1</h2>
+  <table class="data" id="ov-changes" style="max-width:1100px"></table>
+  <h2 id="ov-set-h">The test set</h2>
+  <div class="grid"><div class="card" id="ov-composition"></div><div class="card" id="ov-difficulty"></div></div>
+  <h2>Ground truth, and who is evaluated</h2>
+  <p id="ov-gt"></p>
+  <h2>The result on the test split</h2>
+  <div class="grid"><div class="card wide" id="ov-tiers"></div><div class="card wide" id="ov-sig"></div></div>
+  <div class="callout" id="ov-power"></div>
+  <h2>How this maps to the judging rubric</h2>
+  <table class="data" id="ov-judging"></table>
+  <h2>Disclosure</h2>
+  <p>Built with Claude Code as an AI coding assistant. Data: AVeriTeC (non-commercial license) and the Google / Data Commons ClaimReview feed (fact-checks published by their authors in schema.org markup). Labels are the fact-checkers'; ground-truth annotations are model-written and anchored on those labels.</p>
+</section>
+
+<section class="tab" id="tab-results" data-title="Results">
+  <div class="filters" role="group" aria-label="Filters for every chart on this tab">
+    <label>Source <select id="f-source"><option value="all">All test claims</option><option value="averitec">AVeriTeC (v1's 65)</option><option value="claimreview">ClaimReview (new)</option></select></label>
+    <label>Difficulty <select id="f-diff"><option value="all">Any</option><option value="hard">Hard (4-5)</option><option value="easy">Easier (1-3)</option></select></label>
+    <label>Trap <select id="f-trap"></select></label>
+    <label>Metric <span class="seg" id="f-metric">
+      <button type="button" data-v="verified" aria-pressed="true">Verified acc</button>
+      <button type="button" data-v="correct" aria-pressed="false">Exact 4-way</button>
+      <button type="button" data-v="score" aria-pressed="false">Rubric v2</button></span></label>
+    <span class="sub" id="f-count"></span>
+  </div>
+  <h2>Headline</h2>
+  <div class="kpis" id="r-hero"></div>
+  <h2>Open vs frontier vs improved</h2>
+  <div class="grid">
+    <div class="card wide" id="r-tiers"></div>
+    <div class="card wide" id="r-board"></div>
+    <div class="card wide" id="r-winrate"></div>
+  </div>
+  <h2>Statistical significance</h2>
+  <div class="grid">
+    <div class="card wide" id="r-sig"></div>
+    <div class="card" id="r-gaps"></div>
+    <div class="card" id="r-power"></div>
+  </div>
+  <h2>Rubric v2</h2>
+  <div class="grid">
+    <div class="card wide" id="r-dims"></div>
+    <div class="card" id="r-gates"></div>
+    <div class="card" id="r-kappa"></div>
+    <div class="card wide" id="r-items"></div>
+  </div>
+  <h2>Errors, calibration and robustness</h2>
+  <div class="grid">
+    <div class="card wide" id="r-confusion"></div>
+    <div class="card" id="r-failures"></div>
+    <div class="card" id="r-harm"></div>
+    <div class="card" id="r-calib"></div>
+    <div class="card" id="r-robust"></div>
+  </div>
+  <h2>Breakdowns</h2>
+  <div class="grid">
+    <div class="card" id="r-source"></div>
+    <div class="card" id="r-diffb"></div>
+    <div class="card" id="r-trap"></div>
+    <div class="card" id="r-label"></div>
+    <div class="card wide" id="r-example"></div>
+  </div>
+</section>
+
+<section class="tab" id="tab-iteration" data-title="Iteration">
+  <p>The loop that produced the improved system (<code>15_iterate_v2.py</code>). All choices were made on the <b>dev split</b>; the frozen winner then ran on the test split once. Iterating on the test set would find "significant" gains that are noise.</p>
+  <div class="grid"><div class="card wide" id="it-chart"></div></div>
+  <div id="it-rounds"></div>
+  <h2>Ideas the open model proposed from the dev failures</h2>
+  <p id="it-open-sub" class="sub"></p>
+  <div class="card"><div class="tablewrap" style="max-height:none"><table class="data" id="it-open"></table></div></div>
+</section>
+
+<section class="tab" id="tab-improvements" data-title="Improvements">
+  <p>Every idea with its diagram, its reference, how much time it adds per claim, how long it takes to build, and what it did on the dev split. References were checked against the arXiv API.</p>
+  <div class="grid"><div class="card wide" id="im-combined"></div><div class="card wide" id="im-time"></div></div>
+  <h2>All ideas</h2>
+  <div class="card"><div class="tablewrap" style="max-height:none"><table class="data" id="im-table"></table></div></div>
+</section>
+
+<section class="tab" id="tab-harness" data-title="Harness & efficiency">
+  <p>One pipeline with switchable features (<code>13_run_v2.py</code>). Every feature is measured for what it adds in accuracy <i>and</i> in calls, tokens and seconds per claim.</p>
+  <div class="card diagram" id="hx-arch"></div>
+  <div class="grid" style="margin-top:16px"><div class="card" id="hx-pareto"></div><div class="card" id="hx-cost"></div></div>
+</section>
+
+<section class="tab" id="tab-finetune" data-title="Fine-tuning">
+  <p>Three stages on GLM 5.3 (<code>17_sft_v2.py</code>): supervised fine-tuning on the fact-checkers' own research in the exact v2 task format, preference tuning on citation quality from dev runs, and a planned RL stage with a verifiable reward.</p>
+  <div class="card diagram" id="ft-diagram"></div>
+  <div class="grid" style="margin-top:16px"><div class="card" id="ft-gain"></div><div class="card" id="ft-data"></div></div>
+  <h4>Hyperparameters and timing</h4>
+  <table class="data" id="ft-hp" style="max-width:900px"></table>
+</section>
+
+<section class="tab" id="tab-rubric" data-title="Rubric v2">
+  <div id="rb-intro"></div>
+  <div class="grid"><div class="card" id="rb-dims"></div><div class="card" id="rb-cost"></div></div>
+  <h2>Gates</h2><div class="card"><table class="data" id="rb-gates"></table></div>
+  <h2>All checks</h2><div class="card"><div class="tablewrap" style="max-height:none"><table class="data" id="rb-items"></table></div></div>
+</section>
+
+<section class="tab" id="tab-claims" data-title="Claims">
+  <div class="claims-layout">
+    <div class="card" style="padding:12px">
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px">
+        <input type="search" id="c-q" placeholder="Search claims, speakers" aria-label="Search claims">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <select id="c-split"><option value="">Test + dev</option><option value="test">Test</option><option value="dev">Dev</option></select>
+          <select id="c-src"><option value="">Any source</option><option value="averitec">AVeriTeC</option><option value="claimreview">ClaimReview</option></select>
+          <select id="c-lab"><option value="">Any label</option></select>
+        </div>
+        <span class="sub" id="c-count"></span>
+      </div>
+      <div class="claim-list" id="c-list" role="listbox"></div>
+    </div>
+    <div class="card detail" id="c-detail"></div>
+  </div>
+</section>
+
+<section class="tab" id="tab-videos" data-title="Videos">
+  <p class="sub">Every video in the v2 test and dev splits, with its claims.</p>
+  <div class="card"><div class="toolbar" style="display:flex;gap:10px;margin-bottom:8px"><input type="search" id="v-q" placeholder="Search" aria-label="Search videos"><span class="sub" id="v-count"></span></div>
+  <div class="tablewrap" style="max-height:none"><table class="data" id="v-table"></table></div></div>
+</section>
+</div>
+<div id="tip" role="tooltip"></div>
+</div>
+
+<script id="data" type="application/json">/*__DATA__*/{}</script>
+<script>
+"use strict";
+const D = JSON.parse(document.getElementById("data").textContent);
+const M = D.meta, RUB = D.rubric, IT = D.iteration || {}, NS = "http://www.w3.org/2000/svg", REPS = 4000;
+const MODEL = Object.fromEntries(D.models.map(m => [m.key, m]));
+const RUNS = D.runs, RUN = Object.fromEntries(RUNS.map(r => [r.key, r]));
+const L4 = ["supported", "conflicting", "not_enough_evidence", "refuted"];
+const L4C = { supported: "var(--lab4-supported)", refuted: "var(--lab4-refuted)", conflicting: "var(--lab4-conflicting)", not_enough_evidence: "var(--lab4-nee)" };
+const L4N = { supported: "supported", refuted: "refuted", conflicting: "conflicting", not_enough_evidence: "not enough evidence" };
+const TIER = { open: "var(--sys-base)", frontier: "var(--series-2)", improved: "var(--series-1)" };
+const CL = D.claims, CLID = Object.fromEntries(CL.map(c => [c.id, c]));
+const TEST = CL.filter(c => c.split === "test");
+const state = { source: "all", diff: "all", trap: "all", metric: "verified" };
+const MET = { verified: { name: "verified accuracy", binary: true }, correct: { name: "exact 4-way accuracy", binary: true }, score: { name: "rubric v2 score", binary: false } };
+
+// ---------- helpers ----------
+function h(t, a = {}, p, x) { const e = document.createElement(t); for (const [k, v] of Object.entries(a)) if (v != null) e.setAttribute(k, v); if (x != null) e.textContent = x; if (p) p.appendChild(e); return e; }
+function s(t, a = {}, p, x) { const e = document.createElementNS(NS, t); for (const [k, v] of Object.entries(a)) if (v != null) e.setAttribute(k, v); if (x != null) e.textContent = x; if (p) p.appendChild(e); return e; }
+const pct = (x, d = 1) => x == null || isNaN(x) ? "–" : (100 * x).toFixed(d) + "%";
+const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
+const fmtP = p => p == null ? "–" : p >= 0.001 ? (+p.toFixed(3)).toString() : p.toExponential(1);
+const met = () => MET[state.metric];
+const fmtV = x => met().binary ? pct(x) : (100 * x).toFixed(1);
+const fmtGap = x => (x >= 0 ? "+" : "−") + Math.abs(100 * x).toFixed(1) + (met().binary ? " pp" : " pts");
+const cap = t => t[0].toUpperCase() + t.slice(1);
+const width = (el, fb = 560) => Math.max(320, Math.round(el.clientWidth) || fb);
+const isDark = () => document.documentElement.dataset.theme === "dark" || (document.documentElement.dataset.theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+function barPath(x0, y, w, hh, r = 4) { if (!w) return ""; const rr = Math.min(r, Math.abs(w), hh / 2), x1 = x0 + w; return w > 0 ? `M${x0},${y}H${x1 - rr}Q${x1},${y} ${x1},${y + rr}V${y + hh - rr}Q${x1},${y + hh} ${x1 - rr},${y + hh}H${x0}Z` : `M${x0},${y}H${x1 + rr}Q${x1},${y} ${x1},${y + rr}V${y + hh - rr}Q${x1},${y + hh} ${x1 + rr},${y + hh}H${x0}Z`; }
+const tip = document.getElementById("tip");
+function showTip(e, t, rows) { tip.replaceChildren(); h("div", { class: "t" }, tip, t); rows.forEach(r => { const d = h("div", { class: "r" }, tip); if (r.color) h("i", { style: `background:${r.color}` }, d); h("b", {}, d, r.value); if (r.label) h("span", {}, d, r.label); }); tip.style.display = "block"; let x, y; if (e.type === "focus") { const b = e.target.getBoundingClientRect(); x = b.right; y = b.top; } else { x = e.clientX; y = e.clientY; } tip.style.left = Math.min(x + 14, innerWidth - tip.offsetWidth - 8) + "px"; tip.style.top = Math.max(8, Math.min(y + 14, innerHeight - tip.offsetHeight - 8)) + "px"; }
+const hideTip = () => { tip.style.display = "none"; };
+function hover(el, fn) { el.classList.add("mark"); el.setAttribute("tabindex", "0"); el.addEventListener("pointermove", e => { const [t, r] = fn(); showTip(e, t, r); }); el.addEventListener("focus", e => { const [t, r] = fn(); showTip(e, t, r); }); el.addEventListener("pointerleave", hideTip); el.addEventListener("blur", hideTip); return el; }
+function card(id, title, desc, render) {
+  const root = document.getElementById(id); if (!root) return; root.replaceChildren();
+  const head = h("div", { class: "card-head" }, root), t = h("div", {}, head); h("h3", {}, t, title); if (desc) h("div", { class: "desc" }, t, desc);
+  const btn = h("button", { class: "toggle", type: "button" }, head, "Table"), body = h("div", {}, root);
+  let out = {}; try { out = render(body) || {}; } catch (e) { h("div", { class: "desc no" }, body, "Could not draw: " + e.message); console.error(e); }
+  if (!out.table) { btn.remove(); return; }
+  const w = h("div", { class: "tablewrap", hidden: "" }, root), T = h("table", { class: "data" }, w), tr = h("tr", {}, h("thead", {}, T));
+  out.table.cols.forEach(c => h("th", {}, tr, c)); const tb = h("tbody", {}, T); out.table.rows.forEach(r => { const x = h("tr", {}, tb); r.forEach(c => h("td", {}, x, c)); });
+  btn.addEventListener("click", () => { const on = w.hidden; w.hidden = !on; body.hidden = on; btn.textContent = on ? "Chart" : "Table"; });
+}
+function legend(p, items, dot) { const l = h("div", { class: "legend" }, p); items.forEach(([n, c]) => { const sp = h("span", {}, l); h("i", { class: dot ? "dot" : "", style: `background:${c}` }, sp); sp.appendChild(document.createTextNode(n)); }); }
+function chip(p, lab) { const c = h("span", { class: "chip" }, p); h("span", { class: "sw", style: `background:${L4C[lab] || "var(--axis)"}` }, c); c.appendChild(document.createTextNode(L4N[lab] || lab)); return c; }
+function flow(p, steps) { const f = h("div", { class: "mini-flow" }, p); steps.forEach((x, i) => { h("span", { class: "b" }, f, x); if (i < steps.length - 1) h("span", { class: "a" }, f, "→"); }); return f; }
+function groupedHBar(body, { groups, series, value, fmt, max = 1, ticks, tickFmt = v => pct(v, 0), note }) {
+  const W = width(body), L = Math.min(240, Math.round(W * .36)), R = 74, bh = 12, gap = 2, gp = 16; ticks = ticks || [0, .25, .5, .75, 1].map(t => t * max);
+  const gh = series.length * (bh + gap) - gap, H = 8 + groups.length * (gh + gp) + 22, svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body), x = v => L + (W - L - R) * v / max;
+  ticks.forEach(t => { s("line", { x1: x(t), x2: x(t), y1: 4, y2: H - 20, stroke: "var(--grid)" }, svg); s("text", { x: x(t), y: H - 6, class: "tick", "text-anchor": "middle" }, svg, tickFmt(t)); });
+  groups.forEach((g, gi) => { const y0 = 8 + gi * (gh + gp); s("text", { x: L - 10, y: y0 + gh / 2 + (g.sub ? -2 : 4), class: "lbl", "text-anchor": "end" }, svg, g.label); if (g.sub) s("text", { x: L - 10, y: y0 + gh / 2 + 12, class: "tick", "text-anchor": "end" }, svg, g.sub);
+    series.forEach((sr, si) => { const v = value(g, sr), y = y0 + si * (bh + gap); if (v == null || isNaN(v)) return; const gg = s("g", {}, svg); s("rect", { x: L, y: y - 1, width: W - L, height: bh + 2, class: "hit" }, gg); s("path", { d: barPath(x(0), y, Math.max(x(Math.max(v, 0)) - x(0), v > 0 ? 1.5 : 0), bh), fill: sr.color }, gg); s("text", { x: x(Math.max(v, 0)) + 5, y: y + bh - 2, class: "val" }, gg, fmt(v, g, sr)); hover(gg, () => [g.label + (g.sub ? ` (${g.sub})` : ""), [{ value: fmt(v, g, sr), label: sr.name, color: sr.color }]]); }); });
+  s("line", { x1: x(0), x2: x(0), y1: 4, y2: H - 20, stroke: "var(--axis)" }, svg); if (note) h("div", { class: "desc" }, body, note);
+}
+function stacked(body, rowsDef, parts) {
+  const W = width(body), L = 170, R = 10, rh = 30, H = rowsDef.length * rh + 4, svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+  rowsDef.forEach((rd, i) => { const y = 4 + i * rh; s("text", { x: L - 8, y: y + 14, class: rd.strong ? "lbl-strong" : "lbl", "text-anchor": "end" }, svg, rd.name.length > 26 ? rd.name.slice(0, 25) + "…" : rd.name);
+    let x0 = L; const c = parts.map(p => rd.count(p.key)), tot = c.reduce((a, b) => a + b, 0) || 1;
+    parts.forEach((p, j) => { const w = (W - L - R) * c[j] / tot; if (w <= 0) return; const g = s("g", {}, svg), ww = Math.max(0, w - (x0 + w >= W - R - .5 ? 0 : 2)); s("rect", { x: x0, y, width: ww, height: 20, rx: 3, fill: p.color }, g); const lab = pct(c[j] / tot, 0); if (ww > lab.length * 6.5 + 8) s("text", { x: x0 + ww / 2, y: y + 14, "text-anchor": "middle", style: `font-size:11px;fill:${p.ink || "#fff"}` }, g, lab); hover(g, () => [rd.name, [{ value: `${c[j]} (${lab})`, label: p.name, color: p.color }]]); x0 += w; }); });
+}
+function arrowDefs(svg) { const m = s("marker", { id: "arw", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, s("defs", {}, svg)); s("path", { d: "M0,0L10,5L0,10z", fill: "var(--axis)" }, m); }
+function scatter(body, pts, { xName, xFmt, yFmt, bubble, ymaxFix }) {
+  const W = width(body), L = 50, R = 30, T = 14, B = 36, H = 280, xmax = Math.max(...pts.map(p => p.x), 1e-9) * 1.12, ymax = ymaxFix || Math.min(1, Math.max(.5, ...pts.map(p => p.y)) + .1);
+  const X = v => L + (W - L - R) * v / xmax, Y = v => H - B - (H - B - T) * v / ymax, svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+  for (let t = 0; t <= ymax + 1e-9; t += .1) { s("line", { x1: L, x2: W - R, y1: Y(t), y2: Y(t), stroke: "var(--grid)" }, svg); if (Math.round(t * 10) % 2 === 0) s("text", { x: L - 6, y: Y(t) + 4, class: "tick", "text-anchor": "end" }, svg, yFmt(t)); }
+  [0, .25, .5, .75, 1].forEach(f => s("text", { x: X(f * xmax), y: H - B + 16, class: "tick", "text-anchor": "middle" }, svg, xFmt(f * xmax))); s("text", { x: W - R, y: H - 2, class: "tick", "text-anchor": "end" }, svg, xName);
+  const bmax = Math.max(...pts.map(p => p.b || 1));
+  pts.forEach(p => { const g = s("g", {}, svg), rr = bubble ? 5 + 10 * Math.sqrt((p.b || 0) / bmax) : 6; s("circle", { cx: X(p.x), cy: Y(p.y), r: Math.max(12, rr), class: "hit" }, g); s("circle", { cx: X(p.x), cy: Y(p.y), r: rr, fill: p.color, "fill-opacity": bubble ? .75 : 1, stroke: "var(--surface-1)", "stroke-width": 2 }, g); if (p.label) s("text", { x: X(p.x) + rr + 4, y: Y(p.y) + 4, class: "tick" }, g, p.label); hover(g, () => [p.name, p.tip]); });
+}
+
+// ---------- roles (pre-registered by the iteration log) ----------
+const FROZEN = IT.frozen || { model: M.base_open, name: "rag" };
+const key = (split, model, sys) => `${split}/${model}/${sys}`;
+const has = k => !!D.rows[k];
+const ROLE = {};
+ROLE.improved = has(key("test", FROZEN.model, FROZEN.name)) ? key("test", FROZEN.model, FROZEN.name) : RUNS.find(r => r.split === "test" && r.tier !== "frontier" && r.system !== "closed_book")?.key;
+ROLE.baseOff = key("test", M.base_open, "closed_book");
+ROLE.baseRag = key("test", M.base_open, "rag");
+ROLE.baseFrozen = key("test", M.base_open, FROZEN.name);
+const frontierOff = RUNS.filter(r => r.split === "test" && r.tier === "frontier" && r.system === "closed_book");
+const vAll = (k, c) => D.rows[k][c.id];
+ROLE.frontierBest = frontierOff.sort((a, b) => mean(TEST.map(c => vAll(b.key, c).verified)) - mean(TEST.map(c => vAll(a.key, c).verified)))[0]?.key;
+ROLE.frontierH = ROLE.frontierBest && has(key("test", RUN[ROLE.frontierBest].model, FROZEN.name)) ? key("test", RUN[ROLE.frontierBest].model, FROZEN.name) : null;
+const HEAD = [["Open, off the shelf", ROLE.baseOff, "var(--sys-base)"], ["Best frontier, off the shelf", ROLE.frontierBest, "var(--series-2)"], ["Improved open (frozen)", ROLE.improved, "var(--series-1)"], ["Frontier + same harness", ROLE.frontierH, "var(--series-3)"]].filter(x => x[1] && has(x[1]));
+const label = k => { const r = RUN[k]; return `${r.name} · ${r.system === "closed_book" ? "off the shelf" : r.system === FROZEN.name ? "frozen harness" : r.system}`; };
+const short = k => { const r = RUN[k]; return `${r.name.split(" ")[0]}${r.model.endsWith("ft2") ? "+FT" : ""} ${r.system === "closed_book" ? "off-shelf" : r.system === FROZEN.name ? "frozen" : r.system.slice(0, 14)}`; };
+const tierOf = k => { const r = RUN[k]; return r.tier === "frontier" ? "frontier" : r.system === "closed_book" && r.tier === "open" ? "open" : "improved"; };
+
+// ---------- stats ----------
+const sel = () => TEST.filter(c => (state.source === "all" || c.source === state.source) && (state.trap === "all" || c.traps.includes(state.trap)) &&
+  (state.diff === "all" || (c.gt && (state.diff === "hard" ? c.gt.difficulty >= 4 : c.gt.difficulty <= 3))));
+const val = (k, c) => { const r = D.rows[k][c.id]; return state.metric === "score" ? r.score / 100 : r[state.metric]; };
+const avg = (cs, k) => mean(cs.map(c => val(k, c)));
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function mcnemar(cs, a, b) { let x = 0, y = 0; cs.forEach(c => { const p = val(a, c), q = val(b, c); if (p && !q) x++; if (!p && q) y++; }); const n = x + y, k = Math.min(x, y); if (!n || x === y) return { nA: x, nB: y, p: 1 }; let lc = 0, t = 0; for (let i = 0; i <= k; i++) { if (i) lc += Math.log((n - i + 1) / i); t += Math.exp(lc - n * Math.LN2); } return { nA: x, nB: y, p: Math.min(1, 2 * t) }; }
+function perm(cs, a, b, reps = 8000) { const d = cs.map(c => val(a, c) - val(b, c)), o = Math.abs(mean(d)), r = rng(11); let hit = 0; for (let i = 0; i < reps; i++) { let s2 = 0; for (const x of d) s2 += r() < .5 ? x : -x; if (Math.abs(s2 / d.length) >= o - 1e-12) hit++; } return { nA: d.filter(x => x > 0).length, nB: d.filter(x => x < 0).length, p: (hit + 1) / (reps + 1) }; }
+function boot(cs, a, b) { const by = {}; cs.forEach(c => (by[c.video] = by[c.video] || []).push(c)); const v = Object.keys(by), r = rng(7), per = v.map(k => { let x = 0, y = 0; by[k].forEach(c => { x += val(a, c); y += b ? val(b, c) : 0; }); return [x, y, by[k].length]; }); const g = []; for (let i = 0; i < REPS; i++) { let x = 0, y = 0, n = 0; for (let j = 0; j < v.length; j++) { const p = per[(r() * v.length) | 0]; x += p[0]; y += p[1]; n += p[2]; } g.push(n ? (x - y) / n : 0); } g.sort((p, q) => p - q); return { point: avg(cs, a) - (b ? avg(cs, b) : 0), lo: g[Math.round(.025 * (REPS - 1))], hi: g[Math.round(.975 * (REPS - 1))] }; }
+function family() {
+  const F = [], add = (a, b, grp) => { if (a && b && a !== b && has(a) && has(b) && !F.some(f => f.a === a && f.b === b)) F.push({ a, b, grp }); };
+  add(ROLE.improved, ROLE.baseOff, "Before → after (required)");
+  add(ROLE.improved, ROLE.baseRag, "Over the starting harness");
+  frontierOff.forEach(r => add(ROLE.improved, r.key, "vs frontier, off the shelf"));
+  RUNS.filter(r => r.split === "test" && r.tier === "frontier" && r.system === FROZEN.name).forEach(r => add(ROLE.improved, r.key, "vs frontier + same harness"));
+  if (ROLE.improved !== ROLE.baseFrozen) add(ROLE.improved, ROLE.baseFrozen, "Fine-tune alone (same harness)");
+  RUNS.filter(r => r.split === "test" && r.tier === "open" && r.model !== M.base_open && r.system === FROZEN.name).forEach(r => add(r.key, key("test", r.model, "closed_book"), "Harness on another open model"));
+  return F;
+}
+function tested(cs) {
+  const F = family().map(f => ({ ...f, ...(met().binary ? mcnemar(cs, f.a, f.b) : perm(cs, f.a, f.b)), boot: boot(cs, f.a, f.b), test: met().binary ? "McNemar" : "paired permutation" }));
+  const o = F.map((f, i) => [f.p, i]).sort((x, y) => x[0] - y[0]); let run = 0; o.forEach(([p, i], k) => { run = Math.max(run, Math.min(1, (F.length - k) * p)); F[i].holm = run; });
+  F.forEach(f => { const sig = f.holm < .05 && (f.boot.lo > 0 || f.boot.hi < 0); f.verdict = !sig ? { cls: "nss", icon: "⬜️", text: "Not significant" } : f.boot.point > 0 ? { cls: "good", icon: "🟢", text: "Significant gain" } : { cls: "bad", icon: "▼", text: "Significant loss" }; });
+  return F;
+}
+function mde(n, pd) { for (let d = .005; d < pd; d += .0025) { const need = Math.pow(1.96 * Math.sqrt(pd) + .8416 * Math.sqrt(Math.max(pd - d * d, 1e-9)), 2) / (d * d); if (need <= n) return d; } return null; }
+
+// ---------- OVERVIEW ----------
+function renderOverview() {
+  const cs = TEST, F = tested(cs), main = F.find(f => f.b === ROLE.baseOff), vsF = F.find(f => f.b === ROLE.frontierBest);
+  const t = document.getElementById("tldr"); t.replaceChildren(); h("b", {}, t, "TL;DR. ");
+  t.appendChild(document.createTextNode(`On ${cs.length} test claims (${(cs.length / 65).toFixed(1)}× v1's 65) from ${new Set(cs.map(c => c.video)).size} videos, scored on a harder 4-way task with verification questions, ` +
+    (ROLE.improved ? `the frozen improved open system (${label(ROLE.improved)}) reaches ${fmtV(avg(cs, ROLE.improved))} ${met().name}` : "no improved system has run yet") +
+    (main ? ` vs ${fmtV(avg(cs, ROLE.baseOff))} off the shelf (${fmtGap(main.boot.point)}, Holm p = ${fmtP(main.holm)}: ${main.verdict.text.toLowerCase()})` : "") +
+    (vsF ? `, and ${fmtGap(vsF.boot.point)} against the best evaluated frontier model, ${RUN[ROLE.frontierBest].name} (Holm p = ${fmtP(vsF.holm)}: ${vsF.verdict.text.toLowerCase()}).` : ".") +
+    ` The dev-split stop rule was ${IT.frozen && IT.frozen.dev_stop_rule_met ? "met" : "not met"} before the single test run.`));
+  const k = document.getElementById("ov-kpis"); k.replaceChildren(); k.style.gridTemplateColumns = `repeat(${HEAD.length},minmax(0,1fr))`;
+  HEAD.forEach(([n, r, c]) => { const tl = h("div", { class: "card tile" + (r === ROLE.improved ? " hero" : "") }, k), l = h("div", { class: "label" }, tl); h("i", { style: `width:10px;height:10px;border-radius:3px;background:${c};display:inline-block` }, l); l.appendChild(document.createTextNode(n)); h("div", { class: "value" }, tl, fmtV(avg(cs, r))); h("div", { class: "delta" }, tl, label(r)); const f = F.find(f => f.a === ROLE.improved && f.b === r); if (f) h("span", { class: `verdict ${f.verdict.cls}`, style: "margin-top:6px" }, tl, `${f.verdict.icon} improved is ${fmtGap(f.boot.point)} vs this`); });
+  const T = document.getElementById("ov-changes"); T.replaceChildren(); const hr = h("tr", {}, h("thead", {}, T)); ["", "v1", "v2"].forEach(x => h("th", {}, hr, x)); const tb = h("tbody", {}, T);
+  const S = D.stats || {};
+  [["Test claims", "65 (AVeriTeC video claims)", `${S.test_claims || TEST.length}: v1's 65 + ${(S.test_claims || TEST.length) - 65} English ClaimReview fact-checks of YouTube videos; plus ${S.dev_claims || 0} dev claims for iterating`],
+   ["Task", "3 labels, quote one sentence", "4 labels (adds conflicting / cherry-picked), a confidence, atomic sub-claims, 2-5 verification questions each answered from cited evidence"],
+   ["Ground truth", "Fact-checker label", `Fact-checker label + ${M.gt_model} annotations at "${M.gt_effort}" reasoning effort (gold questions and answers, sub-claims, quantities, traps, difficulty); ${D.adjudication.length} label disagreements queued for human review`],
+   ["Rubric", "50 checks, 5 areas", `${RUB.items.length} checks in 6 dimensions + 5 gates (cap at 25), harm-weighted cost matrix, calibration (Brier), robustness, efficiency budgets, judge reliability (κ)`],
+   ["Evaluated models", "Included the judge's family", `${M.evaluated.length} models; ${M.excluded.map(x => MODEL[x].name).join(", ")} wrote the answer key and judges, so it is not evaluated`],
+   ["Improvement process", "Fixed set of harnesses", "Feature-by-feature on a dev split, combine every positive feature, fine-tune (SFT + DPO), open-model ideation, freeze, one test run"],
+   ["Statistics", "McNemar + bootstrap, Holm", "Same, plus paired permutation on rubric score, a stop rule on dev, and a count of test looks"]]
+    .forEach(r => { const tr = h("tr", {}, tb); h("td", { style: "font-weight:600" }, tr, r[0]); h("td", { class: "muted" }, tr, r[1]); h("td", {}, tr, r[2]); });
+  document.getElementById("ov-set-h").textContent = `The test set: ${(TEST.length / 65).toFixed(1)}× v1's claims`;
+  card("ov-composition", "Test set composition", "Source and 4-way label of the test claims. Real data.", body => {
+    legend(body, L4.map(l => [L4N[l], L4C[l]]));
+    const rd = [["All test claims", TEST], ["AVeriTeC (v1)", TEST.filter(c => c.source === "averitec")], ["ClaimReview (new)", TEST.filter(c => c.source === "claimreview")], ["Dev split", CL.filter(c => c.split === "dev")]];
+    stacked(body, rd.map(([n, x]) => ({ name: `${n} (${x.length})`, count: l => x.filter(c => c.label4 === l).length })), L4.map(l => ({ key: l, name: L4N[l], color: L4C[l], ink: l === "not_enough_evidence" ? "#0b0b0b" : "#fff" })));
+    return { table: { cols: ["Set", ...L4.map(l => L4N[l])], rows: rd.map(([n, x]) => [n, ...L4.map(l => x.filter(c => c.label4 === l).length)]) } };
+  });
+  card("ov-difficulty", "How hard the claims are", "Ground-truth difficulty (1 = one lookup, 5 = multi-step over scarce evidence) and traps per claim.", body => {
+    const g = [1, 2, 3, 4, 5].map(d => ({ key: d, label: `Difficulty ${d}`, n: TEST.filter(c => c.gt && c.gt.difficulty === d).length }));
+    groupedHBar(body, { groups: g, series: [{ name: "claims", color: "var(--series-1)" }], value: x => x.n / Math.max(TEST.length, 1), fmt: (v, x) => `${x.n}`, note: `Mean traps per claim: ${mean(TEST.map(c => c.traps.length)).toFixed(1)}.` });
+    return { table: { cols: ["Difficulty", "Claims"], rows: g.map(x => [x.label, x.n]) } };
+  });
+  const gp = document.getElementById("ov-gt"); gp.replaceChildren();
+  gp.appendChild(document.createTextNode(`The fact-checker's verdict is always the gold label. ${M.gt_model}, the strongest frontier model in the registry, run at "${M.gt_effort}" reasoning effort (the maximum the provider exposes), writes the rest of the answer key for every claim: the verification questions a fact-checker must answer with gold answers, the atomic sub-claims with their own labels, the true value of every number, the traps, and a difficulty rating. It also re-checks each human label; ${D.adjudication.length} disagreements are listed for review rather than overwritten. Because it wrote the answer key and also judges, it is excluded from evaluation; the frontier comparison is ${D.models.filter(m => m.tier === "frontier" && M.evaluated.includes(m.key)).map(m => m.name).join(" and ")}.`));
+  renderTiers("ov-tiers", cs); renderSig("ov-sig", cs, F);
+  const pd = main ? Math.max(.05, (main.nA + main.nB) / cs.length) : .3, md = mde(cs.length, pd), pn = document.getElementById("ov-power"); pn.replaceChildren(); h("b", {}, pn, "Power. ");
+  pn.appendChild(document.createTextNode(`With ${cs.length} test claims and ${pct(pd, 0)} of claims answered differently by the two headline systems, McNemar has 80% power for gains of ${md ? Math.round(md * 100) + " pp" : "–"} or more (v1's 65 claims needed ~20 pp). The rubric score's paired permutation test detects smaller gains.`));
+  const J = document.getElementById("ov-judging"); J.replaceChildren(); const jh = h("tr", {}, h("thead", {}, J)); ["Criterion", "Weight", "What v2 shows", "Where it would lose points"].forEach(x => h("th", {}, jh, x)); const jb = h("tbody", {}, J);
+  [["Benchmark evaluation", "40%", `${TEST.length} locked test claims, a separate dev split for every design decision, ${family().length} pre-registered comparisons with Holm correction, the answer-key model excluded`, "ClaimReview labels skew to false; new claims are recent, so models may have seen the fact-checks"],
+   ["Business value", "25%", "Same user and value math as v1, now with harm-weighted errors (a flip costs more than an abstention)", "No fact-checker interviews"],
+   ["Technical execution", "20%", `${D.ideas.filter(i => i.status === "built").length} harness features built and measured, SFT + DPO pipeline, deterministic number checks, open-model ideation with reference checks`, "Fine-tune and frontier runs need keys"],
+   ["Presentation & demo", "10%", "Iteration chart, improvement diagrams, fine-tuning diagram, before/after example", "Video still to record"],
+   ["Documentation", "5%", "Every script documents its inputs/outputs; this report", "Model IDs to verify"]].forEach(r => { const tr = h("tr", {}, jb); r.forEach(x => h("td", {}, tr, x)); });
+}
+
+// ---------- RESULTS ----------
+function renderTiers(id, cs) {
+  card(id, "Every model off the shelf (hollow) and with the frozen harness (filled)", `${cap(met().name)} on the test split. The fine-tune is drawn from its base model off the shelf.`, body => {
+    legend(body, [["Open", TIER.open], ["Improved / open + harness", TIER.improved], ["Frontier", TIER.frontier]], true);
+    const ms = D.models.filter(m => M.evaluated.includes(m.key) && (has(key("test", m.key, "closed_book")) || has(key("test", m.key, FROZEN.name))));
+    const W = width(body, 1100), L = 230, R = 110, rh = 30, H = ms.length * rh + 30, x = v => L + (W - L - R) * v, svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body), tbl = [];
+    [0, .25, .5, .75, 1].forEach(t => { s("line", { x1: x(t), x2: x(t), y1: 0, y2: H - 22, stroke: "var(--grid)" }, svg); s("text", { x: x(t), y: H - 6, class: "tick", "text-anchor": "middle" }, svg, met().binary ? pct(t, 0) : String(100 * t)); });
+    ms.forEach((m, i) => { const y = 10 + i * rh, b = key("test", m.key, "closed_book"), f = key("test", m.key, FROZEN.name), from = has(b) ? b : (m.tier === "improved" && has(ROLE.baseOff) ? ROLE.baseOff : null), col = m.tier === "frontier" ? TIER.frontier : TIER.improved;
+      s("text", { x: L - 10, y: y + 4, class: m.tier === "improved" ? "lbl-strong" : "lbl", "text-anchor": "end" }, svg, m.name);
+      const g = s("g", {}, svg); s("rect", { x: L, y: y - 12, width: W - L, height: 24, class: "hit" }, g);
+      const vb = from ? avg(cs, from) : null, vf = has(f) ? avg(cs, f) : null;
+      if (vb != null && vf != null) s("line", { x1: x(vb), x2: x(vf), y1: y, y2: y, stroke: col, "stroke-width": 2, "stroke-opacity": .6 }, g);
+      if (vb != null) s("circle", { cx: x(vb), cy: y, r: 5, fill: "var(--surface-1)", stroke: m.tier === "frontier" ? TIER.frontier : TIER.open, "stroke-width": 2 }, g);
+      if (vf != null) { s("circle", { cx: x(vf), cy: y, r: 6, fill: col, stroke: "var(--surface-1)", "stroke-width": 2 }, g); s("text", { x: x(Math.max(vf, vb || 0)) + 10, y: y + 4, class: "val" }, g, fmtV(vf) + (vb != null ? ` (${fmtGap(vf - vb)})` : "")); }
+      hover(g, () => [m.name, [...(vb != null ? [{ value: fmtV(vb), label: "off the shelf", color: TIER.open }] : []), ...(vf != null ? [{ value: fmtV(vf), label: "frozen harness", color: col }] : [])]]);
+      tbl.push([m.name, m.tier, vb != null ? fmtV(vb) : "–", vf != null ? fmtV(vf) : "–"]); });
+    return { table: { cols: ["Model", "Tier", "Off the shelf", "Frozen harness"], rows: tbl } };
+  });
+}
+function renderSig(id, cs, F) {
+  card(id, "Significance of every pre-registered comparison", `${F[0] ? F[0].test : ""} + video-level bootstrap on ${met().name}, Holm-adjusted for ${F.length} comparisons. 🟢 = adjusted p < 0.05 and the 95% interval excludes zero.`, body => {
+    const T = h("table", { class: "data" }, h("div", { class: "tablewrap", style: "max-height:none" }, body)), hr = h("tr", {}, h("thead", {}, T));
+    ["Comparison", "System", "Reference", "Gap", "95% CI", "Better / worse claims", "p", "Holm p", "Verdict"].forEach(x => h("th", {}, hr, x)); const tb = h("tbody", {}, T);
+    F.forEach(f => { const tr = h("tr", {}, tb); [f.grp, label(f.a), label(f.b), fmtGap(f.boot.point), `[${fmtGap(f.boot.lo)}, ${fmtGap(f.boot.hi)}]`, `${f.nA} / ${f.nB}`, fmtP(f.p), fmtP(f.holm)].forEach(x => h("td", {}, tr, x)); h("span", { class: `verdict ${f.verdict.cls}` }, h("td", {}, tr), `${f.verdict.icon} ${f.verdict.text}`); });
+  });
+}
+function renderResults() {
+  const cs = sel(); document.getElementById("f-count").textContent = `${cs.length} test claims · ${new Set(cs.map(c => c.video)).size} videos`; if (!cs.length) return;
+  const F = tested(cs);
+  const hero = document.getElementById("r-hero"); hero.replaceChildren(); hero.style.gridTemplateColumns = `1.5fr repeat(${Math.max(HEAD.length - 1, 1)},minmax(0,1fr))`;
+  const vsF = F.find(f => f.b === ROLE.frontierBest) || F[0];
+  const ht = h("div", { class: "card tile hero" }, hero); h("div", { class: "label" }, ht, `Improved open vs best evaluated frontier, ${met().name}`); h("div", { class: "value" }, ht, vsF ? fmtGap(vsF.boot.point) : "–");
+  if (vsF) { h("div", { class: "delta" }, ht, `${label(vsF.a)} ${fmtV(avg(cs, vsF.a))} vs ${label(vsF.b)} ${fmtV(avg(cs, vsF.b))} · 95% CI [${fmtGap(vsF.boot.lo)}, ${fmtGap(vsF.boot.hi)}] · Holm p ${fmtP(vsF.holm)}`); h("span", { class: `verdict ${vsF.verdict.cls}`, style: "margin-top:6px" }, ht, `${vsF.verdict.icon} ${vsF.verdict.text}`); }
+  HEAD.filter(x => x[1] !== ROLE.improved).forEach(([n, r, c]) => { const tl = h("div", { class: "card tile" }, hero), l = h("div", { class: "label" }, tl); h("i", { style: `width:10px;height:10px;border-radius:3px;background:${c};display:inline-block` }, l); l.appendChild(document.createTextNode(n)); h("div", { class: "value" }, tl, fmtV(avg(cs, r))); h("div", { class: "delta" }, tl, label(r)); });
+  renderTiers("r-tiers", cs);
+  card("r-board", "Leaderboard: every test run with its 95% interval", "Video-level bootstrap interval of the metric itself.", body => {
+    legend(body, [["Open, off the shelf", TIER.open], ["Open + harness / fine-tune", TIER.improved], ["Frontier", TIER.frontier]], true);
+    const rs = RUNS.filter(r => r.split === "test").map(r => ({ k: r.key, v: avg(cs, r.key), ci: boot(cs, r.key, null) })).sort((a, b) => b.v - a.v);
+    const W = width(body, 1100), L = 300, R = 80, rh = 22, H = rs.length * rh + 30, x = v => L + (W - L - R) * Math.max(0, v), svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+    [0, .25, .5, .75, 1].forEach(t => { s("line", { x1: x(t), x2: x(t), y1: 0, y2: H - 22, stroke: "var(--grid)" }, svg); s("text", { x: x(t), y: H - 6, class: "tick", "text-anchor": "middle" }, svg, met().binary ? pct(t, 0) : String(100 * t)); });
+    rs.forEach(({ k, v, ci }, i) => { const y = 10 + i * rh, col = TIER[tierOf(k)], g = s("g", {}, svg); s("text", { x: L - 10, y: y + 4, class: k === ROLE.improved ? "lbl-strong" : "lbl", "text-anchor": "end" }, svg, label(k)); s("rect", { x: L, y: y - 10, width: W - L, height: 20, class: "hit" }, g); s("line", { x1: x(ci.lo), x2: x(ci.hi), y1: y, y2: y, stroke: col, "stroke-width": 2, "stroke-linecap": "round" }, g); s("circle", { cx: x(v), cy: y, r: 5, fill: col, stroke: "var(--surface-1)", "stroke-width": 2 }, g); s("text", { x: x(ci.hi) + 8, y: y + 4, class: "val" }, g, fmtV(v)); hover(g, () => [label(k), [{ value: fmtV(v), label: met().name, color: col }, { value: `[${fmtV(ci.lo)}, ${fmtV(ci.hi)}]`, label: "95% interval" }]]); });
+    return { table: { cols: ["Run", "Value", "95% low", "95% high"], rows: rs.map(r => [label(r.k), fmtV(r.v), fmtV(r.ci.lo), fmtV(r.ci.hi)]) } };
+  });
+  card("r-winrate", "Paired win rate (rubric v2, blind judge)", "Share of claims where the system's rubric score beats the reference's by more than 2 points; ties within 2.", body => {
+    legend(body, [["wins", "var(--div-pos)"], ["ties", "var(--lab-unverified)"], ["losses", "var(--div-neg)"]]);
+    stacked(body, F.map(f => ({ name: `${short(f.a)} vs ${short(f.b)}`, count: k => cs.filter(c => { const d = D.rows[f.a][c.id].score - D.rows[f.b][c.id].score; return k === "w" ? d > 2 : k === "l" ? d < -2 : Math.abs(d) <= 2; }).length })), [{ key: "w", name: "wins", color: "var(--div-pos)" }, { key: "t", name: "ties", color: "var(--lab-unverified)", ink: "#0b0b0b" }, { key: "l", name: "losses", color: "var(--div-neg)" }]);
+  });
+  renderSig("r-sig", cs, F);
+  card("r-gaps", "Gap sizes", "Each comparison's gap with its 95% interval.", body => {
+    const W = width(body), L = 200, R = 14, rh = 26, H = F.length * rh + 30, lim = Math.max(.1, ...F.map(f => Math.max(Math.abs(f.boot.lo), Math.abs(f.boot.hi)))) * 1.1, x = v => L + (W - L - R) * (v + lim) / (2 * lim), svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+    [-lim, -lim / 2, 0, lim / 2, lim].forEach(t => { s("line", { x1: x(t), x2: x(t), y1: 0, y2: H - 22, stroke: Math.abs(t) < 1e-9 ? "var(--axis)" : "var(--grid)" }, svg); s("text", { x: x(t), y: H - 8, class: "tick", "text-anchor": "middle" }, svg, (t > 0 ? "+" : "") + Math.round(100 * t)); });
+    F.forEach((f, i) => { const y = 12 + i * rh, col = f.verdict.cls === "good" ? "var(--series-1)" : f.verdict.cls === "bad" ? "var(--div-neg)" : "var(--sys-base)", g = s("g", {}, svg); s("text", { x: L - 8, y: y + 4, class: "lbl", "text-anchor": "end" }, svg, `${short(f.a)} vs ${short(f.b)}`); s("rect", { x: L, y: y - 11, width: W - L - R, height: 22, class: "hit" }, g); s("line", { x1: x(f.boot.lo), x2: x(f.boot.hi), y1: y, y2: y, stroke: col, "stroke-width": 2, "stroke-linecap": "round" }, g); s("circle", { cx: x(f.boot.point), cy: y, r: 5, fill: col, stroke: "var(--surface-1)", "stroke-width": 2 }, g); hover(g, () => [`${label(f.a)} vs ${label(f.b)}`, [{ value: fmtGap(f.boot.point), label: "gap", color: col }, { value: `[${fmtGap(f.boot.lo)}, ${fmtGap(f.boot.hi)}]`, label: "95% CI" }]]); });
+  });
+  card("r-power", "Power: v1 vs v2 test set", "Smallest accuracy gain McNemar detects at 80% power (α = 0.05), by test-set size, at three disagreement rates.", body => {
+    const pds = [.2, .3, .45], cols = ["var(--seq-3)", "var(--seq-5)", "var(--seq-7)"]; legend(body, pds.map((p, i) => [`${pct(p, 0)} of claims disagree`, cols[i]]));
+    const W = width(body), L = 46, R = 16, T = 10, B = 34, H = 240, X = n => L + (W - L - R) * (n - 30) / 570, Y = d => H - B - (H - B - T) * d / .4, svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+    [0, .1, .2, .3, .4].forEach(t => { s("line", { x1: L, x2: W - R, y1: Y(t), y2: Y(t), stroke: "var(--grid)" }, svg); s("text", { x: L - 6, y: Y(t) + 4, class: "tick", "text-anchor": "end" }, svg, `${Math.round(100 * t)} pp`); });
+    [65, 195, 300, 400, 500, 600].forEach(n => s("text", { x: X(n), y: H - B + 16, class: "tick", "text-anchor": "middle" }, svg, n));
+    pds.forEach((p, i) => { const pts = []; for (let n = 30; n <= 600; n += 10) { const d = mde(n, p); if (d != null && d <= .4) pts.push([n, d]); } s("path", { d: "M" + pts.map(([n, d]) => `${X(n)},${Y(d)}`).join("L"), fill: "none", stroke: cols[i], "stroke-width": 2 }, svg); });
+    [[65, "v1"], [TEST.length, "v2"]].forEach(([n, lab]) => { const d = mde(n, .3); if (d == null) return; const g = s("g", {}, svg); s("circle", { cx: X(n), cy: Y(d), r: 6, fill: "var(--text-primary)", stroke: "var(--surface-1)", "stroke-width": 2 }, g); s("text", { x: X(n) + 9, y: Y(d) - 8, class: "lbl" }, g, `${lab}: ${n} → ${Math.round(100 * d)} pp`); });
+  });
+  const dims = Object.keys(RUB.dims), testRuns = RUNS.filter(r => r.split === "test").map(r => r.key);
+  card("r-dims", "Rubric v2 by dimension", "Rows are test runs; cell = average share of applicable checks passed (κ-weighted). Darker is better.", body => {
+    const rs = testRuns.slice().sort((a, b) => mean(cs.map(c => D.rows[b][c.id].score)) - mean(cs.map(c => D.rows[a][c.id].score)));
+    const W = width(body, 1100), L = 300, R = 70, rh = 24, T = 30, cw = (W - L - R) / dims.length, H = T + rs.length * rh + 4, svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+    dims.forEach((d, j) => s("text", { x: L + j * cw + cw / 2, y: T - 10, class: "lbl", "text-anchor": "middle" }, svg, `${RUB.dims[d].name} (${RUB.dims[d].weight})`)); s("text", { x: W - R + 35, y: T - 10, class: "lbl", "text-anchor": "middle" }, svg, "Score");
+    rs.forEach((k, i) => { const y = T + i * rh; s("text", { x: L - 8, y: y + 15, class: k === ROLE.improved ? "lbl-strong" : "lbl", "text-anchor": "end" }, svg, label(k));
+      dims.forEach((d, j) => { const v = cs.map(c => D.rows[k][c.id].dims[d]).filter(x => x != null), m = v.length ? mean(v) : null, st = m == null ? 0 : Math.min(7, 1 + Math.floor(m * 6.999)), g = s("g", {}, svg); s("rect", { x: L + j * cw + 1, y: y + 1, width: cw - 2, height: rh - 2, rx: 3, fill: st ? `var(--seq-${st})` : "var(--page)" }, g); const light = isDark() ? st <= 4 : st >= 4; s("text", { x: L + j * cw + cw / 2, y: y + 16, "text-anchor": "middle", style: `font-size:11.5px;fill:${st ? (light ? "#fff" : "#0b0b0b") : "var(--text-muted)"}` }, g, m == null ? "n/a" : pct(m, 0)); hover(g, () => [`${label(k)} · ${RUB.dims[d].name}`, [{ value: m == null ? "n/a" : pct(m, 1), label: RUB.dims[d].desc }]]); });
+      s("text", { x: W - R + 35, y: y + 16, class: "val", "text-anchor": "middle" }, svg, mean(cs.map(c => D.rows[k][c.id].score)).toFixed(1)); });
+  });
+  card("r-gates", "Gate failures", "Share of answers failing each gate (a failed gate caps the score at 25). Lower is better.", body => {
+    legend(body, HEAD.map(([n, , c]) => [n, c]));
+    groupedHBar(body, { groups: RUB.gates.map(([g, t]) => ({ key: g, label: g, sub: t.slice(0, 38) })), series: HEAD.map(([n, k, c]) => ({ name: n, color: c, k })), value: (g, sr) => mean(cs.map(c => D.rows[sr.k][c.id].gates[g.key] === false ? 1 : 0)), fmt: v => pct(v, 0) });
+  });
+  card("r-kappa", "Judge reliability", `Cohen's κ between ${M.judge} and ${M.judge2} on a 25% sample, per judge check. Checks under 0.4 count half in the score.`, body => {
+    const ks = Object.entries(RUB.kappa).filter(([, v]) => v != null).sort((a, b) => a[1] - b[1]);
+    if (!ks.length) { h("div", { class: "desc" }, body, "Not enough double-judged answers yet."); return; }
+    groupedHBar(body, { groups: ks.map(([i, v]) => ({ key: i, label: i, v })), series: [{ name: "κ", color: "var(--series-1)" }], value: g => Math.max(0, g.v), fmt: (v, g) => g.v.toFixed(2), ticks: [0, .2, .4, .6, .8, 1], tickFmt: v => v.toFixed(1) });
+    return { table: { cols: ["Check", "κ", "Criterion"], rows: ks.map(([i, v]) => [i, v.toFixed(2), RUB.items.find(x => x.id === i).criterion]) } };
+  });
+  card("r-items", "All checks, every test run", "Pass rate per check over the claims where it applies. Hover for wording.", body => {
+    const items = RUB.items, W = width(body, 1100), L = 300, R = 10, T = 28, rh = 18, cw = (W - L - R) / items.length, H = T + testRuns.length * rh + 6, svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+    let last = ""; items.forEach((it, j) => { if (it.dim !== last) { s("text", { x: L + j * cw + 2, y: T - 14, class: "lbl" }, svg, RUB.dims[it.dim].name); last = it.dim; } s("text", { x: L + j * cw + cw / 2, y: T - 3, class: "tick", "text-anchor": "middle", style: "font-size:8px" }, svg, it.id.slice(1)); });
+    testRuns.forEach((k, i) => { const y = T + i * rh; s("text", { x: L - 8, y: y + 13, class: "lbl", "text-anchor": "end", style: "font-size:11px" }, svg, label(k)); items.forEach((it, j) => { const v = cs.map(c => D.rows[k][c.id].items[j]).filter(x => x != null); if (!v.length) return; const m = mean(v), st = Math.min(7, 1 + Math.floor(m * 6.999)), g = s("g", {}, svg); s("rect", { x: L + j * cw + .5, y: y + .5, width: cw - 1, height: rh - 1, rx: 2, fill: `var(--seq-${st})` }, g); hover(g, () => [`${it.id} · ${it.criterion}`, [{ value: pct(m, 0), label: `passed (${v.length} applicable), ${label(k)}` }]]); }); });
+  });
+  card("r-confusion", "4-way confusion", "Rows: fact-checker. Columns: system. Outlined diagonal is correct.", body => {
+    const wrap = h("div", { style: `display:grid;grid-template-columns:repeat(${Math.min(4, HEAD.length)},minmax(0,1fr));gap:16px` }, body);
+    HEAD.forEach(([n, k, col]) => { const cell = h("div", {}, wrap); legend(cell, [[n, col]]); const W = width(cell, 260), L = 92, T = 30, cw = (W - L) / 4, ch = 30, H = T + 4 * ch + 4, svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, cell);
+      L4.forEach((p, j) => s("text", { x: L + j * cw + cw / 2, y: T - 8, class: "tick", "text-anchor": "middle", style: "font-size:9.5px" }, svg, p === "not_enough_evidence" ? "NEE" : p.slice(0, 10)));
+      L4.forEach((g, i) => { const row = cs.filter(c => c.label4 === g); s("text", { x: L - 6, y: T + i * ch + ch / 2 + 4, class: "lbl", "text-anchor": "end", style: "font-size:11px" }, svg, `${g === "not_enough_evidence" ? "NEE" : g} (${row.length})`);
+        L4.forEach((p, j) => { const q = row.filter(c => D.rows[k][c.id].pred === p).length, sh = row.length ? q / row.length : 0, st = q ? Math.min(7, 1 + Math.floor(sh * 6.999)) : 0, gg = s("g", {}, svg); s("rect", { x: L + j * cw + 1, y: T + i * ch + 1, width: cw - 2, height: ch - 2, rx: 3, fill: st ? `var(--seq-${st})` : "var(--page)" }, gg); if (i === j) s("rect", { x: L + j * cw + 2.5, y: T + i * ch + 2.5, width: cw - 5, height: ch - 5, rx: 3, fill: "none", stroke: "var(--text-primary)", "stroke-opacity": .35 }, gg); const light = isDark() ? st <= 4 : st >= 4; s("text", { x: L + j * cw + cw / 2, y: T + i * ch + ch / 2 + 4, "text-anchor": "middle", style: `font-size:11px;fill:${st ? (light ? "#fff" : "#0b0b0b") : "var(--text-muted)"}` }, gg, q); hover(gg, () => [label(k), [{ value: `${q} (${pct(sh, 0)} of row)`, label: `${L4N[g]} → ${L4N[p]}` }]]); }); }); });
+  });
+  const FAIL = [["verified", "var(--series-1)"], ["right label, not verified", "var(--seq-3)"], ["missed the misleading part", "var(--lab4-conflicting)"], ["wrong abstention", "var(--lab-unverified)"], ["over-claim", "var(--warn)"], ["wrong label", "var(--series-2)"], ["fabricated citation", "var(--seq-7)"], ["flip (supported <-> refuted)", "var(--div-neg)"], ["unparseable output", "var(--text-primary)"]];
+  card("r-failures", "Failure modes", "One name per answer, most severe first.", body => {
+    const pres = FAIL.filter(([f]) => HEAD.some(([, k]) => cs.some(c => D.rows[k][c.id].failure === f))); legend(body, pres);
+    stacked(body, HEAD.map(([n, k]) => ({ name: n, count: f => cs.filter(c => D.rows[k][c.id].failure === f).length })), pres.map(([f, c]) => ({ key: f, name: f, color: c, ink: ["var(--seq-3)", "var(--lab-unverified)", "var(--warn)"].includes(c) ? "#0b0b0b" : "#fff" })));
+  });
+  card("r-harm", "Harm-weighted error and calibration", "Mean cost-matrix error (0 = right, 1 = a flip) and Brier score of stated confidence. Lower is better for both.", body => {
+    legend(body, HEAD.map(([n, , c]) => [n, c]));
+    groupedHBar(body, { groups: [{ key: "cost", label: "Harm-weighted error" }, { key: "brier", label: "Brier score" }], series: HEAD.map(([n, k, c]) => ({ name: n, k, color: c })), value: (g, sr) => mean(cs.map(c => D.rows[sr.k][c.id][g.key])), fmt: v => v.toFixed(3), tickFmt: v => v.toFixed(2) });
+  });
+  card("r-calib", "Reliability diagram", "Stated confidence (binned) vs exact 4-way accuracy, for the improved system and the open baseline. On the diagonal = calibrated.", body => {
+    const W = width(body), L = 46, R = 16, T = 10, B = 34, H = 260, X = v => L + (W - L - R) * v, Y = v => H - B - (H - B - T) * v, svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+    [0, .25, .5, .75, 1].forEach(t => { s("line", { x1: L, x2: W - R, y1: Y(t), y2: Y(t), stroke: "var(--grid)" }, svg); s("text", { x: L - 6, y: Y(t) + 4, class: "tick", "text-anchor": "end" }, svg, pct(t, 0)); s("text", { x: X(t), y: H - B + 16, class: "tick", "text-anchor": "middle" }, svg, pct(t, 0)); });
+    s("line", { x1: X(0), y1: Y(0), x2: X(1), y2: Y(1), stroke: "var(--axis)" }, svg); s("text", { x: W - R, y: H - 2, class: "tick", "text-anchor": "end" }, svg, "stated confidence");
+    const show = [["Improved", ROLE.improved, "var(--series-1)"], ["Open off the shelf", ROLE.baseOff, "var(--sys-base)"]].filter(x => has(x[1])); legend(body, show.map(([n, , c]) => [n, c]), true);
+    show.forEach(([n, k, col]) => { const bins = [[0, .5], [.5, .65], [.65, .8], [.8, .9], [.9, 1.01]], pts = bins.map(([a, b]) => { const x = cs.filter(c => { const r = D.rows[k][c.id]; return r.confidence >= a && r.confidence < b; }); return x.length ? [mean(x.map(c => D.rows[k][c.id].confidence)), mean(x.map(c => D.rows[k][c.id].correct)), x.length] : null; }).filter(Boolean);
+      if (pts.length > 1) s("path", { d: "M" + pts.map(([a, b]) => `${X(a)},${Y(b)}`).join("L"), fill: "none", stroke: col, "stroke-width": 2 }, svg);
+      pts.forEach(([a, b, nn]) => { const g = s("g", {}, svg); s("circle", { cx: X(a), cy: Y(b), r: 12, class: "hit" }, g); s("circle", { cx: X(a), cy: Y(b), r: 4 + Math.min(6, nn / 8), fill: col, stroke: "var(--surface-1)", "stroke-width": 2 }, g); hover(g, () => [n, [{ value: pct(b, 0), label: `accuracy at confidence ~${pct(a, 0)} (${nn} claims)`, color: col }]]); }); });
+  });
+  card("r-robust", "Robustness", "Share of claims with the same 4-way label when the claim is paraphrased or the evidence is shuffled (frozen-harness runs only).", body => {
+    const ks = RUNS.filter(r => r.split === "test" && r.system === FROZEN.name).map(r => r.key);
+    const B1 = RUB.items.findIndex(i => i.id === "B1"), B2 = RUB.items.findIndex(i => i.id === "B2");
+    const gs = ks.map(k => ({ key: k, label: label(k), p: mean(cs.map(c => D.rows[k][c.id].items[B1]).filter(x => x != null)), q: mean(cs.map(c => D.rows[k][c.id].items[B2]).filter(x => x != null)) }));
+    legend(body, [["Paraphrase", "var(--series-1)"], ["Shuffled evidence", "var(--series-3)"]]);
+    groupedHBar(body, { groups: gs, series: [{ name: "paraphrase", color: "var(--series-1)", f: "p" }, { name: "shuffle", color: "var(--series-3)", f: "q" }], value: (g, sr) => g[sr.f], fmt: v => pct(v, 0) });
+  });
+  const bd = (id, title, desc, groupsOf) => card(id, title, desc, body => { legend(body, HEAD.map(([n, , c]) => [n, c])); const gs = groupsOf(cs).filter(g => g.cs.length >= 3); if (!gs.length) { h("div", { class: "desc" }, body, "No group has 3+ claims here."); return; } groupedHBar(body, { groups: gs.map(g => ({ ...g, sub: `n = ${g.cs.length}` })), series: HEAD.map(([n, k, c]) => ({ name: n, k, color: c })), value: (g, sr) => avg(g.cs, sr.k), fmt: v => fmtV(v), tickFmt: v => met().binary ? pct(v, 0) : String(Math.round(100 * v)) }); return { table: { cols: ["Group", "n", ...HEAD.map(x => x[0])], rows: gs.map(g => [g.label, g.cs.length, ...HEAD.map(([, k]) => fmtV(avg(g.cs, k)))]) } }; });
+  bd("r-source", `${cap(met().name)} by source`, "v1's AVeriTeC claims vs the new ClaimReview claims.", x => [["averitec", "AVeriTeC (v1)"], ["claimreview", "ClaimReview (new)"]].map(([k, l]) => ({ key: k, label: l, cs: x.filter(c => c.source === k) })));
+  bd("r-diffb", `${cap(met().name)} by difficulty`, "Ground-truth difficulty rating.", x => [1, 2, 3, 4, 5].map(d => ({ key: d, label: `Difficulty ${d}`, cs: x.filter(c => c.gt && c.gt.difficulty === d) })));
+  bd("r-trap", `${cap(met().name)} by trap`, "Sample size beside every bar.", x => Object.keys(RUB.traps).map(t => ({ key: t, label: RUB.traps[t].name, cs: x.filter(c => c.traps.includes(t)) })).sort((a, b) => b.cs.length - a.cs.length));
+  bd("r-label", `${cap(met().name)} by the fact-checker's label`, "Per-class performance on the 4-way task.", x => L4.map(l => ({ key: l, label: L4N[l], cs: x.filter(c => c.label4 === l) })));
+  card("r-example", "Before / after on one claim", "A test claim the open model got wrong off the shelf and the frozen improved system verified.", body => {
+    if (!has(ROLE.improved) || !has(ROLE.baseOff)) return; const c = cs.filter(c => D.rows[ROLE.improved][c.id].verified && !D.rows[ROLE.baseOff][c.id].verified).sort((a, b) => (b.gt?.difficulty || 0) - (a.gt?.difficulty || 0))[0]; if (!c) { h("div", { class: "desc" }, body, "No such claim in this slice."); return; }
+    h("b", {}, h("div", { style: "margin-bottom:6px" }, body), `“${c.claim}”`); const m = h("div", { class: "desc" }, body); m.appendChild(document.createTextNode(`${c.speaker || "unknown"} · ${c.claim_date || ""} · fact-checker: `)); chip(m, c.label4);
+    const g = h("div", { style: "display:grid;grid-template-columns:1fr 1fr;gap:14px" }, body); [[`Before: ${label(ROLE.baseOff)}`, ROLE.baseOff], [`After: ${label(ROLE.improved)}`, ROLE.improved]].forEach(([t, k]) => answerBox(g, t, D.rows[k][c.id]));
+  });
+}
+function answerBox(p, title, r) {
+  const b = h("div", { style: "border:1px solid var(--grid);border-radius:8px;padding:10px 12px;background:var(--page)" }, p); h("div", { style: "font-weight:600;margin-bottom:4px" }, b, title);
+  const l = h("div", {}, b); chip(l, r.pred); l.appendChild(document.createTextNode(` · confidence ${pct(r.confidence, 0)} · `)); h("span", { class: r.verified ? "ok" : "no" }, l, r.verified ? "✓ verified" : `✗ ${r.failure}`);
+  h("div", { class: "muted", style: "font-size:12px;margin:3px 0" }, b, `rubric ${r.score.toFixed(1)} · gates ${Object.entries(r.gates).filter(([, v]) => !v).map(([g]) => g).join(", ") || "all pass"}`);
+  h("div", { style: "font-size:13px;margin:4px 0" }, b, r.rationale || "(no rationale)");
+  if (r.questions.length) { const q = h("details", {}, b); h("summary", {}, q, `${r.questions.length} verification questions`); r.questions.forEach(x => { const d = h("div", { class: "cite" }, q); h("div", { style: "color:var(--text-primary)" }, d, x.q); h("div", {}, d, x.answer); }); }
+  r.cites.forEach(z => { const ci = h("div", { class: "cite" }, b); h("div", {}, ci, `“${z.quote}”`); const mm = h("div", { class: "muted" }, ci); mm.appendChild(document.createTextNode((z.url || "").replace(/^https?:\/\/(www\.)?/, "").slice(0, 60) + " ")); [["resolves", z.resolves], ["verbatim", z.quote_found], ["backs", z.backs]].forEach(([n, ok]) => h("span", { class: ok ? "ok" : "no" }, mm, ` ${ok ? "✓" : "✗"} ${n}`)); });
+}
+
+// ---------- ITERATION ----------
+function renderIteration() {
+  const R = IT.rounds || [], runs = IT.runs || {};
+  card("it-chart", "Dev-split rubric score at each step", "Each dot is a dev run; the line follows the system kept after each round. Bars below show added model-seconds per claim (timeliness).", body => {
+    const pts = []; R.forEach((r, ri) => r.entries.forEach(e => { if (runs[e.run]) pts.push({ ri, e, run: runs[e.run] }); }));
+    if (!pts.length) { h("div", { class: "desc" }, body, "No iteration log yet: run 15_iterate_v2.py."); return; }
+    const W = width(body, 1100), L = 50, Rr = 20, T = 14, H = 300, B = 70, xs = ri => L + (W - L - Rr) * (ri + .5) / R.length, ymin = Math.min(...pts.map(p => p.run.score)) - 3, ymax = Math.max(...pts.map(p => p.run.score)) + 3, Y = v => T + (H - B - T) * (1 - (v - ymin) / (ymax - ymin || 1)), svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+    for (let t = Math.ceil(ymin); t <= ymax; t += Math.max(1, Math.round((ymax - ymin) / 5))) { s("line", { x1: L, x2: W - Rr, y1: Y(t), y2: Y(t), stroke: "var(--grid)" }, svg); s("text", { x: L - 6, y: Y(t) + 4, class: "tick", "text-anchor": "end" }, svg, t); }
+    R.forEach((r, ri) => s("text", { x: xs(ri), y: H - B + 18, class: "tick", "text-anchor": "middle" }, svg, r.round.split(":")[0].trim() === r.round ? r.round.slice(0, 18) : "round " + r.round.split(":")[0]));
+    pts.forEach((p, i) => { const g = s("g", {}, svg), jitter = ((i * 37) % 9 - 4) * 4, col = p.e.positive ? "var(--series-1)" : p.e.combined ? "var(--series-3)" : "var(--sys-base)"; s("circle", { cx: xs(p.ri) + jitter, cy: Y(p.run.score), r: 12, class: "hit" }, g); s("circle", { cx: xs(p.ri) + jitter, cy: Y(p.run.score), r: p.e.combined ? 7 : 5, fill: col, stroke: "var(--surface-1)", "stroke-width": 2 }, g);
+      hover(g, () => [p.e.run, [{ value: p.run.score.toFixed(1), label: "dev rubric score", color: col }, { value: pct(p.run.verified, 0), label: "dev verified accuracy" }, ...(p.e.gain != null ? [{ value: (p.e.gain >= 0 ? "+" : "") + (100 * p.e.gain).toFixed(1) + " pts", label: `gain, P(gain>0) = ${p.e.p_gain.toFixed(2)}` }] : []), { value: p.run.seconds_per_claim.toFixed(1) + " s", label: "model time per claim" }]]); });
+    const sec = pts.map(p => p.run.seconds_per_claim), smax = Math.max(...sec, 1e-9);
+    pts.forEach((p, i) => { const jitter = ((i * 37) % 9 - 4) * 4, hh = 30 * p.run.seconds_per_claim / smax; s("rect", { x: xs(p.ri) + jitter - 3, y: H - 8 - hh, width: 6, height: Math.max(1, hh), rx: 2, fill: "var(--seq-3)" }, svg); });
+    s("text", { x: L, y: H - 2, class: "tick" }, svg, `bars: model-seconds per claim (max ${smax.toFixed(1)} s)`);
+    legend(body, [["feature kept (positive)", "var(--series-1)"], ["combined system", "var(--series-3)"], ["other runs", "var(--sys-base)"]], true);
+  });
+  const box = document.getElementById("it-rounds"); box.replaceChildren();
+  R.forEach(r => { const d = h("div", { class: "round card" + (r.decision.startsWith("met") ? " met" : ""), style: "margin:12px 0" }, box); h("h3", {}, d, `Round ${r.round}`); h("div", { style: "margin:4px 0 8px" }, d, r.decision);
+    if (r.entries.length) { const T = h("table", { class: "data" }, d), hr = h("tr", {}, h("thead", {}, T)); ["Run", "Feature", "Dev score", "Dev verified", "Gain", "95% CI", "P(gain > 0)", "Added s/claim", "Kept?"].forEach(x => h("th", {}, hr, x)); const tb = h("tbody", {}, T);
+      r.entries.forEach(e => { const ru = runs[e.run] || {}, tr = h("tr", {}, tb); [e.run, e.feature ? D.features[e.feature]?.name || e.feature : (e.combined ? "combined: " + e.combined.join(" + ") : ""), ru.score != null ? ru.score.toFixed(1) : "–", ru.verified != null ? pct(ru.verified, 0) : "–", e.gain != null ? (e.gain >= 0 ? "+" : "") + (100 * e.gain).toFixed(1) + " pts" : "–", e.lo != null ? `[${(100 * e.lo).toFixed(1)}, ${(100 * e.hi).toFixed(1)}]` : "–", e.p_gain != null ? e.p_gain.toFixed(2) : "–", e.added_seconds != null ? (e.added_seconds >= 0 ? "+" : "") + e.added_seconds.toFixed(1) : (ru.seconds_per_claim != null ? ru.seconds_per_claim.toFixed(1) + " total" : "–"), e.positive ? "✓" : e.combined ? "combined" : ""].forEach(x => h("td", {}, tr, x)); }); } });
+  if (IT.frozen) { const d = h("div", { class: "callout" }, box); h("b", {}, d, "Frozen: "); d.appendChild(document.createTextNode(`${MODEL[IT.frozen.model]?.name || IT.frozen.model} with ${IT.frozen.flags.map(f => D.features[f]?.name || f).join(" + ")}. Dev stop rule ${IT.frozen.dev_stop_rule_met ? "met" : "not met"}; test split looked at ${IT.test_looks} time(s).`)); }
+  const O = D.ideas_open || {}, T = document.getElementById("it-open"); T.replaceChildren();
+  document.getElementById("it-open-sub").textContent = O.ideas ? `${O.ideas.length} ideas from ${O.model}, given the failure analysis of ${O.from_run}. References were looked up on arXiv; unverified ones are marked.` : "Run 16_ideate_open.py (15_iterate_v2.py runs it).";
+  if (O.ideas) { const hr = h("tr", {}, h("thead", {}, T)); ["Idea", "Type", "Hypothesis", "Diagram", "Expected gain", "Added s/claim", "Build h", "Reference"].forEach(x => h("th", {}, hr, x)); const tb = h("tbody", {}, T);
+    O.ideas.forEach(i => { const tr = h("tr", {}, tb); h("td", { style: "font-weight:600" }, tr, i.name); h("td", {}, tr, i.type); h("td", { class: "muted" }, tr, `${i.hypothesis || ""} ${i.mechanism ? "— " + i.mechanism : ""}`); flow(h("td", {}, tr), (i.steps || []).slice(0, 6).map(String)); h("td", {}, tr, i.expected_gain_pp != null ? `+${i.expected_gain_pp} pp` : "–"); h("td", {}, tr, i.added_seconds != null ? String(i.added_seconds) : "–"); h("td", {}, tr, i.build_hours != null ? String(i.build_hours) : "–"); const td = h("td", {}, tr); td.appendChild(document.createTextNode(String(i.reference || "–") + " ")); h("span", { class: i.reference_check?.startsWith("verified") ? "ok" : "no", style: "font-size:11px" }, td, i.reference_check || ""); }); }
+}
+
+// ---------- IMPROVEMENTS ----------
+function ideaResult(i) {
+  const runs = IT.runs || {}, single = (IT.rounds || []).flatMap(r => r.entries).find(e => e.feature === i.feature);
+  if (single) return { text: `${single.gain >= 0 ? "+" : ""}${(100 * single.gain).toFixed(1)} pts on dev (P = ${single.p_gain.toFixed(2)})${single.positive ? ", kept" : ""}`, added: single.added_seconds, positive: single.positive, gain: single.gain };
+  if (i.feature === "ft") { const e = (IT.rounds || []).find(r => r.round.startsWith("3"))?.entries[0]; if (e) return { text: `fine-tune: ${(100 * e.gain).toFixed(1)} pts on dev vs base on the same harness`, added: 0, positive: e.gain > 0 && e.p_gain >= .8 }; }
+  if (["retrieve", "questions", "quote_check"].includes(i.feature)) { const e = (IT.rounds || [])[0]?.entries[1]; if (e) return { text: `part of the starting harness: ${(100 * e.gain).toFixed(1)} pts on dev vs off the shelf`, added: null, positive: e.gain > 0 }; }
+  return { text: "–", added: null };
+}
+function renderImprovements() {
+  const comb = (IT.rounds || []).find(r => r.round.startsWith("2"));
+  card("im-combined", "The combined improvement", "Every feature that helped on its own, switched on together (and the fine-tune when it helped too). This is the system that was frozen and run on the test split.", body => {
+    const e = comb?.entries.find(x => x.combined); const fz = IT.frozen;
+    if (!fz) { h("div", { class: "desc" }, body, "Run 15_iterate_v2.py to produce it."); return; }
+    const steps = ["Transcript clip", ...(fz.flags.includes("router") ? ["Router"] : []), ...(fz.flags.includes("decompose") ? ["Sub-claims + questions"] : ["Verification questions"]), "Search" + (fz.flags.includes("date_guard") ? " (date-guarded)" : ""), ...(fz.flags.includes("rerank") ? ["BM25 rerank"] : []), ...(fz.flags.includes("numcheck") ? ["Number check"] : []), (fz.model.endsWith("ft2") ? "Fine-tuned labeler" : "Labeler"), "Quote check + repair", ...(fz.flags.includes("adaptive_vote") ? ["Vote if unsure"] : []), ...(fz.flags.includes("critic") ? ["Critic"] : []), "4-way verdict + QA + citations"];
+    flow(body, steps);
+    const t = h("p", { style: "margin-top:10px" }, body); t.appendChild(document.createTextNode(e ? `Combined ${e.combined.map(f => D.features[f]?.name || f).join(" + ")} on top of the starting harness: ${(100 * e.gain).toFixed(1)} pts on dev (95% CI [${(100 * e.lo).toFixed(1)}, ${(100 * e.hi).toFixed(1)}], P = ${e.p_gain.toFixed(2)}).` : "No feature was positive on its own, so nothing was combined; the starting harness was kept."));
+    const fr = IT.runs?.[`test/${fz.model}/${fz.name}`]; if (fr) h("div", { class: "desc" }, body, `Timeliness on test: ${fr.seconds_per_claim.toFixed(1)} model-seconds, ${fr.calls_per_claim.toFixed(1)} calls and ${Math.round(fr.tokens_per_claim).toLocaleString()} tokens per claim.`);
+  });
+  card("im-time", "Gain vs added time per claim", "Each built feature measured alone on dev against the starting harness. Up and to the left is the best deal; below zero hurt.", body => {
+    const pts = D.ideas.map(i => ({ i, r: ideaResult(i) })).filter(x => x.r.gain != null && x.r.added != null);
+    if (!pts.length) { h("div", { class: "desc" }, body, "No measured features yet."); return; }
+    const W = width(body, 1100), L = 56, R = 30, T = 14, B = 36, H = 280, xs = pts.map(p => p.r.added), xmin = Math.min(0, ...xs) - .5, xmax = Math.max(...xs, .5) + .5, gains = pts.map(p => p.r.gain), ylim = Math.max(.05, ...gains.map(Math.abs)) * 1.2;
+    const X = v => L + (W - L - R) * (v - xmin) / (xmax - xmin), Y = v => T + (H - B - T) * (1 - (v + ylim) / (2 * ylim)), svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+    [-ylim, 0, ylim].forEach(t => { s("line", { x1: L, x2: W - R, y1: Y(t), y2: Y(t), stroke: t === 0 ? "var(--axis)" : "var(--grid)" }, svg); s("text", { x: L - 6, y: Y(t) + 4, class: "tick", "text-anchor": "end" }, svg, `${t > 0 ? "+" : ""}${(100 * t).toFixed(0)} pts`); });
+    s("line", { x1: X(0), x2: X(0), y1: T, y2: H - B, stroke: "var(--axis)" }, svg); s("text", { x: W - R, y: H - 4, class: "tick", "text-anchor": "end" }, svg, "added model-seconds per claim");
+    pts.forEach((p, j) => { const g = s("g", {}, svg), col = p.r.positive ? "var(--series-1)" : "var(--sys-base)"; s("circle", { cx: X(p.r.added), cy: Y(gains[j]), r: 12, class: "hit" }, g); s("circle", { cx: X(p.r.added), cy: Y(gains[j]), r: 6, fill: col, stroke: "var(--surface-1)", "stroke-width": 2 }, g); s("text", { x: X(p.r.added) + 9, y: Y(gains[j]) + 4, class: "tick" }, g, p.i.name); hover(g, () => [p.i.name, [{ value: p.r.text, label: "" }, { value: `${p.r.added >= 0 ? "+" : ""}${p.r.added.toFixed(2)} s`, label: "per claim" }]]); });
+    legend(body, [["positive (kept)", "var(--series-1)"], ["not kept", "var(--sys-base)"]], true);
+  });
+  const T = document.getElementById("im-table"); T.replaceChildren(); const hr = h("tr", {}, h("thead", {}, T)); ["#", "Idea", "Type", "Status", "Diagram", "Reference", "Timeliness", "Dev result"].forEach(x => h("th", {}, hr, x)); const tb = h("tbody", {}, T);
+  const all = [...D.ideas, ...((D.ideas_open || {}).ideas || []).map(i => ({ name: i.name, type: i.type, status: "proposed by " + (i.proposed_by || "open model"), steps: i.steps || [], ref: { label: `${i.reference || "–"} (${i.reference_check || ""})`, url: (String(i.reference || "").match(/\d{4}\.\d{4,5}/) || [])[0] ? "https://arxiv.org/abs/" + String(i.reference).match(/\d{4}\.\d{4,5}/)[0] : "" }, build_hours: i.build_hours, note: "", est_added: i.added_seconds }))];
+  all.forEach((i, n) => { const tr = h("tr", {}, tb), r = i.feature !== undefined ? ideaResult(i) : { text: "–", added: null }; h("td", {}, tr, n + 1); const nm = h("td", {}, tr); h("div", { style: "font-weight:600" }, nm, i.name); if (i.note) h("div", { class: "muted", style: "font-size:11.5px" }, nm, i.note); h("td", {}, tr, i.type);
+    h("span", { class: `status ${String(i.status).split(" ")[0].replace(/[()]/g, "")}` }, h("td", {}, tr), i.status); flow(h("td", {}, tr), i.steps);
+    const rf = h("td", { style: "font-size:12px" }, tr); if (i.ref.url) h("a", { href: i.ref.url, target: "_blank", rel: "noopener" }, rf, i.ref.label); else rf.textContent = i.ref.label;
+    const est = i.feature && D.features[i.feature] ? D.features[i.feature].added_s : i.est_added;
+    h("td", { style: "font-size:12px" }, tr, `${r.added != null ? (r.added >= 0 ? "+" : "") + r.added.toFixed(1) + " s/claim measured" : est != null ? (est >= 0 ? "+" : "") + est + " s/claim est." : "–"}; build ${i.build_hours ?? "–"} h`);
+    h("td", { class: r.positive ? "ok" : "", style: "font-size:12px" }, tr, r.text); });
+}
+
+// ---------- HARNESS ----------
+function renderHarness() {
+  const a = document.getElementById("hx-arch"); a.replaceChildren(); h("h3", {}, a, "Pipeline (each colored step is a switchable feature)");
+  const steps = [["Transcript clip", null], ["Router", "router"], ["Extract claims", null], ["Sub-claims", "decompose"], ["Verification questions", "questions"], ["Search (fact-check sites blocked)", "retrieve"], ["Date guard", "date_guard"], ["BM25 rerank", "rerank"], ["Number check", "numcheck"], ["Label: 4-way + QA + confidence", null], ["Quote check + repair", "quote_check"], ["Vote if unsure", "adaptive_vote"], ["Critic", "critic"], ["Verdict", null]];
+  const fz = new Set((IT.frozen || {}).flags || []), W = width(a, 1100), cols = 7, bw = (W - 40) / cols - 14, bh = 46, rows = Math.ceil(steps.length / cols), H = rows * (bh + 30) + 20, svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, a); arrowDefs(svg);
+  steps.forEach(([n, f], i) => { const r = Math.floor(i / cols), c = r % 2 ? cols - 1 - i % cols : i % cols, x = 20 + c * (bw + 14), y = 10 + r * (bh + 30), on = f && fz.has(f), g = s("g", {}, svg);
+    s("rect", { x, y, width: bw, height: bh, rx: 8, fill: on ? "var(--series-1)" : f ? "var(--seq-1)" : "var(--page)", stroke: "var(--border)" }, g);
+    const words = n.split(" "), mid = Math.ceil(words.length / 2), l1 = words.length > 2 ? words.slice(0, mid).join(" ") : n, l2 = words.length > 2 ? words.slice(mid).join(" ") : ""; s("text", { x: x + bw / 2, y: y + (l2 ? 19 : 27), "text-anchor": "middle", style: `font-size:11.5px;fill:${on ? "#fff" : "var(--text-primary)"}` }, g, l1); if (l2) s("text", { x: x + bw / 2, y: y + 34, "text-anchor": "middle", style: `font-size:11.5px;fill:${on ? "#fff" : "var(--text-primary)"}` }, g, l2);
+    if (i < steps.length - 1) { const nr = Math.floor((i + 1) / cols); if (nr === r) { const [a, b] = r % 2 ? [x, x - 14] : [x + bw, x + bw + 14]; s("line", { x1: a, x2: b, y1: y + bh / 2, y2: y + bh / 2, stroke: "var(--axis)", "stroke-width": 1.5, "marker-end": "url(#arw)" }, svg); } else s("line", { x1: x + bw / 2, x2: x + bw / 2, y1: y + bh, y2: y + bh + 30, stroke: "var(--axis)", "stroke-width": 1.5, "marker-end": "url(#arw)" }, svg); }
+    if (f) hover(g, () => [n, [{ value: on ? "on in the frozen system" : "off in the frozen system", label: D.features[f]?.name || "" }]]); });
+  legend(a, [["feature on in the frozen system", "var(--series-1)"], ["feature, off", "var(--seq-1)"], ["always on", "var(--page)"]]);
+  const dev = Object.entries(IT.runs || {}).filter(([k]) => k.startsWith("dev/"));
+  card("hx-pareto", "Accuracy vs time (dev runs)", "Every dev configuration: x = model-seconds per claim, y = dev rubric score. The upper-left edge is the efficient frontier.", body => {
+    if (!dev.length) { h("div", { class: "desc" }, body, "No dev runs yet."); return; }
+    scatter(body, dev.map(([k, r]) => ({ x: r.seconds_per_claim, y: r.score / 100, color: r.model.endsWith("ft2") ? "var(--series-3)" : r.flags.length > 3 ? "var(--series-1)" : "var(--sys-base)", name: k.replace("dev/", ""), tip: [{ value: r.score.toFixed(1), label: "dev rubric" }, { value: r.seconds_per_claim.toFixed(1) + " s", label: "per claim" }, { value: r.calls_per_claim.toFixed(1), label: "calls per claim" }] })), { xName: "model-seconds per claim", xFmt: v => v.toFixed(1), yFmt: v => String(Math.round(100 * v)) });
+    legend(body, [["base model, <= 3 features", "var(--sys-base)"], ["base model, more features", "var(--series-1)"], ["fine-tuned model", "var(--series-3)"]], true);
+  });
+  card("hx-cost", "Cost of each configuration", "Calls, tokens and seconds per claim on dev.", body => {
+    const T = h("table", { class: "data" }, body), hr = h("tr", {}, h("thead", {}, T)); ["Config", "Calls", "Tokens", "Seconds", "Dev score"].forEach(x => h("th", {}, hr, x)); const tb = h("tbody", {}, T);
+    dev.sort((a, b) => a[1].seconds_per_claim - b[1].seconds_per_claim).forEach(([k, r]) => { const tr = h("tr", {}, tb); [k.replace("dev/", ""), r.calls_per_claim.toFixed(1), Math.round(r.tokens_per_claim).toLocaleString(), r.seconds_per_claim.toFixed(1), r.score.toFixed(1)].forEach(x => h("td", {}, tr, x)); });
+  });
+}
+
+// ---------- FINE-TUNING ----------
+function renderFinetune() {
+  const S = D.sft || {}, d = document.getElementById("ft-diagram"); d.replaceChildren(); h("h3", {}, d, "Fine-tuning pipeline");
+  const drop = Object.values(S.dropped || {}).reduce((a, b) => a + b, 0);
+  const stages = [["AVeriTeC train + dev", `${(S.averitec_rows || 0).toLocaleString()} claims`, "data"], ["Leakage filter", `−${drop.toLocaleString()} (held-out claims, videos, articles, near-duplicates, uncitable)`, "data"], ["SFT v2 data", `${(S.train || 0).toLocaleString()} train / ${(S.val || 0).toLocaleString()} val, v2 prompt, gold QA`, "data"],
+    ["LoRA SFT", "GLM 5.3, rank 32, 2 epochs, lr 1e-4 (~1-1.5 h)", "train"], ["Dev runs", "SFT model + harnesses on the dev split", "eval"], ["DPO pairs", `${D.dpo_pairs} pairs: verified beats fabricated/flipped`, "data"], ["DPO", "1 epoch, lr 5e-6 (~0.5 h)", "train"], ["glm-5.3-ft2", "frozen harness, dev then test", "eval"], ["GRPO (planned)", "reward = label × gates × verified quote", "planned"]];
+  const W = width(d, 1100), cols = 5, bw = (W - 40) / cols - 18, bh = 80, rows = Math.ceil(stages.length / cols), H = rows * (bh + 34) + 10, svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, d), fill = { data: "var(--seq-1)", train: "var(--series-1)", eval: "var(--page)", planned: "var(--page)" }; arrowDefs(svg);
+  stages.forEach(([t, sub, kind], i) => { const r = Math.floor(i / cols), c = r % 2 ? cols - 1 - i % cols : i % cols, x = 20 + c * (bw + 18), y = 6 + r * (bh + 34), g = s("g", {}, svg);
+    s("rect", { x, y, width: bw, height: bh, rx: 8, fill: fill[kind], stroke: kind === "planned" ? "var(--axis)" : "var(--border)", "stroke-dasharray": kind === "planned" ? "4 3" : null }, g);
+    s("text", { x: x + 10, y: y + 20, style: `font-size:12.5px;font-weight:600;fill:${kind === "train" ? "#fff" : "var(--text-primary)"}` }, g, t);
+    const words = sub.split(" "); let line = "", ln = 0; words.forEach(w => { if ((line + " " + w).length > Math.floor(bw / 6.3)) { s("text", { x: x + 10, y: y + 37 + ln * 14, style: `font-size:11px;fill:${kind === "train" ? "#fff" : "var(--text-secondary)"}` }, g, line); line = w; ln++; } else line = line ? line + " " + w : w; }); if (line && ln < 3) s("text", { x: x + 10, y: y + 37 + ln * 14, style: `font-size:11px;fill:${kind === "train" ? "#fff" : "var(--text-secondary)"}` }, g, line);
+    hover(g, () => [t, [{ value: sub, label: "" }]]);
+    if (i < stages.length - 1) { const nr = Math.floor((i + 1) / cols); if (nr === r) { const [a, b] = r % 2 ? [x, x - 18] : [x + bw, x + bw + 18]; s("line", { x1: a, x2: b, y1: y + bh / 2, y2: y + bh / 2, stroke: "var(--axis)", "stroke-width": 1.5, "marker-end": "url(#arw)" }, svg); } else s("line", { x1: x + bw / 2, x2: x + bw / 2, y1: y + bh, y2: y + bh + 34, stroke: "var(--axis)", "stroke-width": 1.5, "marker-end": "url(#arw)" }, svg); } });
+  legend(d, [["data", "var(--seq-1)"], ["training", "var(--series-1)"], ["evaluation / planned", "var(--page)"]]);
+  card("ft-gain", "What fine-tuning adds", "Same frozen harness, base model vs fine-tuned model, on dev and test.", body => {
+    const fz = IT.frozen || {}, nm = fz.name || "rag", pairs = [["dev", `dev/${M.base_open}/${nm}`, `dev/glm-5.3-ft2/${nm}`], ["test", `test/${M.base_open}/${nm}`, `test/glm-5.3-ft2/${nm}`]].filter(([, a, b]) => has(a) && has(b));
+    if (!pairs.length) { h("div", { class: "desc" }, body, "Needs SFT2_MODEL_ID and the iteration loop."); return; }
+    legend(body, [["GLM 5.3 base", "var(--sys-base)"], ["GLM 5.3 + SFT + DPO", "var(--series-1)"]]);
+    const ids = k => Object.keys(D.rows[k]);
+    groupedHBar(body, { groups: pairs.flatMap(([sp, a, b]) => [["verified", "verified accuracy"], ["correct", "exact 4-way"], ["score", "rubric (÷100)"]].map(([m, n]) => ({ key: sp + m, label: `${sp}: ${n}`, a, b, m }))), series: [{ name: "base", color: "var(--sys-base)", w: "a" }, { name: "fine-tuned", color: "var(--series-1)", w: "b" }],
+      value: (g, sr) => mean(ids(g[sr.w]).map(i => g.m === "score" ? D.rows[g[sr.w]][i].score / 100 : D.rows[g[sr.w]][i][g.m])), fmt: v => pct(v) });
+  });
+  card("ft-data", "Training data", "Label mix and what was removed (real counts from 17_sft_v2.py).", body => {
+    if (!S.labels) { h("div", { class: "desc" }, body, "Run 17_sft_v2.py data."); return; }
+    legend(body, L4.map(l => [L4N[l], L4C[l]]));
+    stacked(body, [{ name: "SFT v2 train", count: l => S.labels[l] || 0 }, { name: "Test set", count: l => TEST.filter(c => c.label4 === l).length }], L4.map(l => ({ key: l, name: L4N[l], color: L4C[l], ink: l === "not_enough_evidence" ? "#0b0b0b" : "#fff" })));
+    const ul = h("ul", { class: "prose", style: "font-size:12.5px" }, body); Object.entries(S.dropped || {}).forEach(([k, v]) => h("li", {}, ul, `${v.toLocaleString()} ${k}`)); h("li", {}, ul, `${S.augmented} evidence-dropout examples; ${S.questions_per_example} verification questions per example`);
+  });
+  const T = document.getElementById("ft-hp"); T.replaceChildren(); const tb = h("tbody", {}, T);
+  [["Base model", "GLM 5.3 (Fireworks)"], ["SFT", "LoRA rank 32, 2 epochs, learning rate 1e-4, context 12,288; loss on the assistant turn only"], ["DPO", "On the SFT checkpoint, 1 epoch, learning rate 5e-6; pairs from dev runs only (never test)"], ["Targets", "4-way label, confidence (0.9 / 0.8 / 0.7), every verification question answered with a cited verbatim sentence, fact-checker's justification"], ["Timeliness", "Data build ~1 min (no model); SFT ~1-1.5 h; DPO ~0.5 h; serving latency equals the base model's at the same harness"], ["Status", M.mock ? "Data built (real); training not yet run: needs a Fireworks key" : "See the iteration log"]].forEach(([a, b]) => { const tr = h("tr", {}, tb); h("td", { style: "font-weight:600;width:160px" }, tr, a); h("td", {}, tr, b); });
+}
+
+// ---------- RUBRIC ----------
+function renderRubric() {
+  const i = document.getElementById("rb-intro"); i.replaceChildren(); h("h2", { style: "margin-top:6px" }, i, `${RUB.items.length} checks, 6 dimensions, 5 gates`);
+  h("p", {}, i, `Auto checks are computed from the answer, the fetched sources and the ground-truth key. Judge checks go to ${M.judge} (blind to model and system) with the full answer key; ${M.judge2} re-judges a 25% sample, and checks with Cohen's κ < 0.4 count half. Any failed gate caps the score at 25. Headline metric — verified accuracy — requires the exact 4-way label, every gate passing, and (for decisive labels) a citation that passes every check.`);
+  card("rb-dims", "Dimension weights", "", body => { const ds = Object.entries(RUB.dims); groupedHBar(body, { groups: ds.map(([k, d]) => ({ key: k, label: d.name, sub: `${RUB.items.filter(x => x.dim === k).length} checks`, w: d.weight })), series: [{ name: "weight", color: "var(--series-1)" }], value: g => g.w / 100, fmt: v => `${Math.round(100 * v)}`, max: .3, ticks: [0, .1, .2, .3], tickFmt: v => String(Math.round(100 * v)) }); });
+  card("rb-cost", "Cost matrix (harm of each error)", "Rows: truth. Columns: answer. 1 = worst (a flip).", body => {
+    const W = width(body), L = 130, T = 40, cw = (W - L) / 4, ch = 34, H = T + 4 * ch + 4, svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+    L4.forEach((p, j) => s("text", { x: L + j * cw + cw / 2, y: T - 10, class: "tick", "text-anchor": "middle" }, svg, L4N[p]));
+    L4.forEach((g, ii) => { s("text", { x: L - 8, y: T + ii * ch + ch / 2 + 4, class: "lbl", "text-anchor": "end" }, svg, L4N[g]); L4.forEach((p, j) => { const v = RUB.cost[g][p], st = v ? Math.min(7, 1 + Math.floor(v * 6.999)) : 0, gg = s("g", {}, svg); s("rect", { x: L + j * cw + 1, y: T + ii * ch + 1, width: cw - 2, height: ch - 2, rx: 3, fill: st ? `var(--seq-${st})` : "var(--page)" }, gg); const light = isDark() ? st <= 4 : st >= 4; s("text", { x: L + j * cw + cw / 2, y: T + ii * ch + ch / 2 + 4, "text-anchor": "middle", style: `font-size:12px;fill:${st ? (light ? "#fff" : "#0b0b0b") : "var(--text-muted)"}` }, gg, v.toFixed(1)); hover(gg, () => [`truth ${L4N[g]}, answer ${L4N[p]}`, [{ value: v.toFixed(1), label: "harm" }]]); }); });
+  });
+  const G = document.getElementById("rb-gates"); G.replaceChildren(); const gb = h("tbody", {}, G); RUB.gates.forEach(([g, t]) => { const tr = h("tr", {}, gb); h("td", { style: "font-weight:600;width:60px" }, tr, g); h("td", {}, tr, t); });
+  const T = document.getElementById("rb-items"); T.replaceChildren(); const hr = h("tr", {}, h("thead", {}, T)); ["ID", "Dimension", "Check", "Weight", "Scored by", "Applies when", "κ", "Pass rate: open off-shelf → improved"].forEach(x => h("th", {}, hr, x)); const tb = h("tbody", {}, T);
+  RUB.items.forEach((it, j) => { const tr = h("tr", {}, tb), rate = k => { if (!has(k)) return "–"; const v = TEST.map(c => D.rows[k][c.id].items[j]).filter(x => x != null); return v.length ? pct(mean(v), 0) : "n/a"; }; [it.id, RUB.dims[it.dim].name, it.criterion, it.weight, it.method === "auto" ? "deterministic" : "judge (blind)", it.applies.startsWith("trap:") ? "trap: " + (RUB.traps[it.applies.slice(5)]?.name || it.applies) : it.applies.replace(/_/g, " "), RUB.kappa[it.id] != null ? RUB.kappa[it.id].toFixed(2) : "", `${rate(ROLE.baseOff)} → ${rate(ROLE.improved)}`].forEach(x => h("td", {}, tr, x)); });
+}
+
+// ---------- CLAIMS ----------
+let selected = null;
+function renderClaims() {
+  const lab = document.getElementById("c-lab"); if (lab.options.length === 1) { L4.forEach(l => h("option", { value: l }, lab, L4N[l])); ["c-q", "c-split", "c-src", "c-lab"].forEach(id => document.getElementById(id).addEventListener(id === "c-q" ? "input" : "change", renderClaimList)); }
+  renderClaimList();
+}
+function renderClaimList() {
+  const q = document.getElementById("c-q").value.trim().toLowerCase(), sp = document.getElementById("c-split").value, src = document.getElementById("c-src").value, lb = document.getElementById("c-lab").value;
+  const list = CL.filter(c => (!q || (c.claim + " " + (c.speaker || "")).toLowerCase().includes(q)) && (!sp || c.split === sp) && (!src || c.source === src) && (!lb || c.label4 === lb));
+  document.getElementById("c-count").textContent = `${list.length} of ${CL.length} claims`;
+  const L = document.getElementById("c-list"); L.replaceChildren();
+  list.slice(0, 400).forEach(c => { const it = h("div", { class: "claim-item", role: "option", tabindex: "0", "aria-selected": String(selected === c.id) }, L); h("div", { class: "t" }, it, c.claim.length > 140 ? c.claim.slice(0, 139) + "…" : c.claim); const m = h("div", { class: "m" }, it); chip(m, c.label4); m.appendChild(document.createTextNode(` · ${c.split} · ${c.source} · ${c.speaker || "unknown"}${c.gt ? " · difficulty " + c.gt.difficulty : ""}`));
+    const pick = () => { selected = c.id; L.querySelectorAll(".claim-item").forEach(x => x.setAttribute("aria-selected", "false")); it.setAttribute("aria-selected", "true"); renderClaimDetail(c); }; it.addEventListener("click", pick); it.addEventListener("keydown", e => { if (e.key === "Enter") pick(); }); });
+  const cur = list.find(c => c.id === selected) || list[0]; if (cur) { selected = cur.id; renderClaimDetail(cur); }
+}
+function renderClaimDetail(c) {
+  const d = document.getElementById("c-detail"); d.replaceChildren(); h("h2", {}, d, `“${c.claim}”`);
+  const m = h("div", { class: "desc" }, d); m.appendChild(document.createTextNode(`${c.speaker || "unknown"}${c.setting ? " · " + c.setting : ""} · ${c.claim_date || ""} · ${c.split} · ${c.source}${c.fact_checker ? " (" + c.fact_checker + ")" : ""} · fact-checker: `)); chip(m, c.label4); m.appendChild(document.createTextNode(` (${c.gold_raw}) · `)); h("a", { href: c.clip.url, target: "_blank", rel: "noopener" }, m, "open the clip ↗");
+  h("h4", {}, d, "Why it was selected"); const tr = h("div", { class: "trail" }, d);
+  [["Source", c.source === "averitec" ? "AVeriTeC video claim (v1)" : `ClaimReview by ${c.fact_checker}; appeared in a YouTube video`], ["Located by", `${c.located_by} (${Math.round(100 * (c.overlap || 0))}% of the claim's words in the clip)`], ["Clip", `${Math.round(c.clip.start)}–${Math.round(c.clip.end)} s of a ${Math.round((c.clip.video_seconds || 0) / 60)} min video`], ["Label", `${c.gold_raw} → ${L4N[c.label4]}`]].forEach(([k, v]) => { const x = h("div", {}, tr); h("b", {}, x, k); x.appendChild(document.createTextNode(v)); });
+  h("h4", {}, d, "Transcript excerpt"); h("div", { class: "transcript" }, d, c.clip.transcript);
+  h("h4", {}, d, "Fact-checker's explanation"); h("div", { style: "font-size:13px" }, d, c.justification || "(none)");
+  if (c.gt) { h("h4", {}, d, `Ground truth (${c.gt.model}, effort ${c.gt.effort}) · difficulty ${c.gt.difficulty}${c.gt.label_check && !c.gt.label_check.agrees ? " · ⚠ disagrees with the fact-checker: " + (c.gt.label_check.note || "") : ""}`);
+    const g = h("div", { style: "display:grid;grid-template-columns:1fr 1fr;gap:14px" }, d), q = h("div", {}, g); h("div", { class: "muted", style: "font-size:12px" }, q, "Verification questions and gold answers"); c.gt.questions.forEach(x => { const b = h("div", { class: "cite" }, q); h("div", { style: "color:var(--text-primary)" }, b, x.q); h("div", {}, b, x.answer || ""); });
+    const r = h("div", {}, g); h("div", { class: "muted", style: "font-size:12px" }, r, "Sub-claims"); c.gt.subclaims.forEach(x => { const b = h("div", { class: "cite" }, r); chip(b, x.label); b.appendChild(document.createTextNode(" " + x.text)); }); if (c.gt.quantities.length) { h("div", { class: "muted", style: "font-size:12px;margin-top:6px" }, r, "Quantities"); c.gt.quantities.forEach(x => h("div", { class: "cite" }, r, `stated ${x.stated} → actual ${x.actual ?? "unknown"} ${x.unit || ""}`)); } }
+  h("h4", {}, d, `Traps (${c.traps.length})`); const tp = h("div", {}, d); c.traps.forEach(t => { const T = RUB.traps[t]; if (!T) return; const x = h("div", { style: "margin:3px 0" }, tp); h("span", { class: "tag" }, x, T.name); x.appendChild(document.createTextNode(" " + T.why)); });
+  h("h4", {}, d, "How every system answered"); const T = h("table", { class: "data" }, d), hr = h("tr", {}, h("thead", {}, T)); ["Run", "Label", "Conf.", "Verified", "Rubric", "Failure", ""].forEach(x => h("th", {}, hr, x)); const tb = h("tbody", {}, T);
+  RUNS.filter(r => r.split === c.split && D.rows[r.key][c.id]).sort((a, b) => D.rows[b.key][c.id].score - D.rows[a.key][c.id].score).forEach(r => { const x = D.rows[r.key][c.id], t2 = h("tr", {}, tb); h("td", {}, t2, label(r.key)); chip(h("td", {}, t2), x.pred); h("td", {}, t2, pct(x.confidence, 0)); h("td", { class: x.verified ? "ok" : "no" }, t2, x.verified ? "✓" : "✗"); h("td", {}, t2, x.score.toFixed(1)); h("td", { class: "muted" }, t2, x.failure);
+    const btn = h("button", { type: "button", class: "toggle", style: "font-size:11.5px;padding:2px 7px" }, h("td", {}, t2), "Details"), det = h("tr", { hidden: "" }, tb), dc = h("td", { colspan: "7" }, det);
+    btn.addEventListener("click", () => { det.hidden = !det.hidden; btn.textContent = det.hidden ? "Details" : "Hide"; if (dc.childNodes.length) return; const g = h("div", { style: "display:grid;grid-template-columns:1fr 1fr;gap:14px" }, dc); answerBox(g, label(r.key), x); const right = h("div", {}, g);
+      Object.keys(RUB.dims).forEach(dm => { h("div", { class: "muted", style: "font-size:11.5px;margin-top:6px" }, right, `${RUB.dims[dm].name} (${RUB.dims[dm].weight}) · ${x.dims[dm] == null ? "n/a" : pct(x.dims[dm], 0)}`); const grid = h("div", { class: "items-grid" }, right); RUB.items.forEach((it, j) => { if (it.dim !== dm) return; const v = x.items[j]; h("span", { class: v == null ? "" : v ? "p" : "f", title: `${it.id}: ${it.criterion}` }, grid, `${it.id} ${v == null ? "–" : v ? "✓" : "✗"}`); }); }); }); });
+}
+
+// ---------- VIDEOS ----------
+function renderVideos() {
+  const q = document.getElementById("v-q"); if (!q.dataset.wired) { q.dataset.wired = 1; q.addEventListener("input", renderVideos); }
+  const by = {}; CL.forEach(c => (by[c.video] = by[c.video] || []).push(c));
+  const vids = Object.entries(by).filter(([v, cs]) => !q.value || (v + cs.map(c => c.claim + c.speaker).join(" ")).toLowerCase().includes(q.value.toLowerCase())).sort((a, b) => b[1].length - a[1].length);
+  document.getElementById("v-count").textContent = `${vids.length} videos`;
+  const T = document.getElementById("v-table"); T.replaceChildren(); const hr = h("tr", {}, h("thead", {}, T)); ["Video", "Source", "Speaker", "Length", "Claims", "Labels", "Splits"].forEach(x => h("th", {}, hr, x)); const tb = h("tbody", {}, T);
+  vids.forEach(([v, cs]) => { const tr = h("tr", {}, tb); h("a", { href: cs[0].clip.url, target: "_blank", rel: "noopener" }, h("td", {}, tr), v.replace("yt:", "")); h("td", {}, tr, [...new Set(cs.map(c => c.source))].join(", ")); h("td", {}, tr, cs[0].speaker || "–"); h("td", {}, tr, `${Math.round((cs[0].clip.video_seconds || 0) / 60)} min`); h("td", {}, tr, cs.length); const lt = h("td", {}, tr); cs.forEach(c => { chip(lt, c.label4); lt.appendChild(document.createTextNode(" ")); }); h("td", {}, tr, [...new Set(cs.map(c => c.split))].join(", ")); });
+}
+
+// ---------- wiring ----------
+const TABS = [...document.querySelectorAll("section.tab")].map(x => x.id.slice(4));
+const RENDER = { overview: renderOverview, results: renderResults, iteration: renderIteration, improvements: renderImprovements, harness: renderHarness, finetune: renderFinetune, rubric: renderRubric, claims: renderClaims, videos: renderVideos };
+let current = null;
+function showTab(n) { if (!TABS.includes(n)) n = "overview"; current = n; document.querySelectorAll("section.tab").forEach(x => x.classList.toggle("on", x.id === "tab-" + n)); document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === n))); if (location.hash.replace(/^#\/?/, "") !== n) { try { history.replaceState(null, "", "#" + n); } catch (e) { /* file:// */ } } RENDER[n](); }
+{
+  const nav = document.getElementById("tabs"); TABS.forEach(t => { const b = h("button", { type: "button", role: "tab", "data-tab": t }, nav, document.getElementById("tab-" + t).dataset.title); b.addEventListener("click", () => showTab(t)); });
+  document.getElementById("meta").textContent = `${TEST.length} test + ${CL.length - TEST.length} dev claims · ${new Set(RUNS.map(r => r.model)).size} models · ${RUNS.length} runs · ground truth + judge: ${M.gt_model} (not evaluated) · generated ${M.generated}`;
+  if (M.mock) { const b = h("div", { class: "banner" }, document.getElementById("banner")); h("b", {}, b, "Mock data. "); b.appendChild(document.createTextNode("Every model answer, ground-truth annotation, judge score and iteration result here comes from the offline mock backend, so nothing about model quality is real yet, and no improvement has actually been found. The claims, transcripts, labels, fact-checker explanations, fine-tuning data and references are real. Add a Fireworks secret and an OpenRouter key and run 12 → 15.")); }
+  const tp = document.getElementById("f-trap"); h("option", { value: "all" }, tp, "All traps"); Object.entries(RUB.traps).forEach(([k, t]) => h("option", { value: k }, tp, `${t.name} (${TEST.filter(c => c.traps.includes(k)).length})`));
+  [["f-source", "source"], ["f-diff", "diff"], ["f-trap", "trap"]].forEach(([id, k]) => document.getElementById(id).addEventListener("change", e => { state[k] = e.target.value; renderResults(); }));
+  document.querySelectorAll("#f-metric button").forEach(b => b.addEventListener("click", () => { state.metric = b.dataset.v; document.querySelectorAll("#f-metric button").forEach(o => o.setAttribute("aria-pressed", String(o === b))); renderResults(); }));
+  document.getElementById("theme").addEventListener("click", () => { document.documentElement.dataset.theme = isDark() ? "light" : "dark"; RENDER[current](); });
+  addEventListener("hashchange", () => showTab(location.hash.replace(/^#\/?/, "")));
+  showTab(location.hash.replace(/^#\/?/, "") || "overview");
+}
+</script>
+</body>
+</html>

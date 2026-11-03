@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fact-checking short videos with open models</title>
+<style>
+:root {
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --base: #8a8984;
+  --seq1: #d6e6f9; --seq2: #b0cff3; --seq3: #84b3ec; --seq4: #5996e2; --seq5: #2a78d6; --seq6: #1d5fb0; --seq7: #144786;
+  --sup: #2a78d6; --ref: #e34948; --con: #1baf7a; --nee: #a3a29a; --warn: #f2a83b;
+  --tint1: #eaf2fc; --tint2: #fdf0ea; --tint3: #e8f7f1;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #1d1d1b; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; }
+#stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+.slide { position: absolute; width: 1280px; height: 720px; background: var(--page); color: var(--ink); overflow: hidden; display: none; transform-origin: center center; }
+.slide.on { display: block; }
+.slide header { position: absolute; left: 64px; top: 40px; right: 64px; z-index: 2; }
+.kicker { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--s1); font-weight: 600; }
+.slide h2 { font-size: 34px; line-height: 1.15; margin: 6px 0 0; font-weight: 650; letter-spacing: -.01em; max-width: 1100px; }
+.slide .sub { font-size: 17px; color: var(--ink2); margin-top: 8px; max-width: 1050px; line-height: 1.35; }
+.slide svg.layer { position: absolute; inset: 0; width: 1280px; height: 720px; }
+.slide footer { position: absolute; left: 64px; right: 64px; bottom: 18px; font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; z-index: 2; }
+.ribbon { position: absolute; top: 22px; right: -46px; transform: rotate(35deg); background: var(--ref); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .1em; padding: 5px 56px; z-index: 3; }
+svg text { font-family: inherit; fill: var(--ink); }
+.t-muted { fill: var(--muted); } .t-ink2 { fill: var(--ink2); }
+#nav { position: fixed; bottom: 12px; right: 16px; color: #bbb; font-size: 12px; font-family: inherit; z-index: 5; user-select: none; }
+#nav button { background: #333; color: #ddd; border: 0; border-radius: 6px; padding: 4px 10px; margin-left: 4px; cursor: pointer; }
+@media print {
+  @page { size: 1280px 720px; margin: 0; }
+  html, body { background: #fff; }
+  #stage { position: static; display: block; }
+  .slide { display: block !important; position: relative; transform: none !important; page-break-after: always; break-after: page; }
+  #nav { display: none; }
+}
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="nav"><span id="pos"></span><button id="prev" type="button">‹</button><button id="next" type="button">›</button></div>
+<script id="data" type="application/json">/*__DATA__*/{}</script>
+<script>
+"use strict";
+const D = JSON.parse(document.getElementById("data").textContent);
+const NS = "http://www.w3.org/2000/svg", W = 1280, H = 720;
+const R = D.runs, RO = D.roles, MOD = D.models;
+const LC = { supported: "var(--sup)", refuted: "var(--ref)", conflicting: "var(--con)", not_enough_evidence: "var(--nee)" };
+const LN = { supported: "supported", refuted: "refuted", conflicting: "conflicting", not_enough_evidence: "not enough evidence" };
+const L4 = ["supported", "conflicting", "not_enough_evidence", "refuted"];
+const TIERC = { open: "var(--base)", improved: "var(--s1)", frontier: "var(--s2)" };
+const pct = (x, d = 0) => x == null || isNaN(x) ? "–" : (100 * x).toFixed(d) + "%";
+const pp = x => (x >= 0 ? "+" : "−") + Math.abs(100 * x).toFixed(1) + " pp";
+const sum = a => a.reduce((x, y) => x + y, 0);
+
+function h(t, a = {}, p, x) { const e = document.createElement(t); for (const [k, v] of Object.entries(a)) if (v != null) e.setAttribute(k, v); if (x != null) e.textContent = x; if (p) p.appendChild(e); return e; }
+function s(t, a = {}, p, x) { const e = document.createElementNS(NS, t); for (const [k, v] of Object.entries(a)) if (v != null) e.setAttribute(k, v); if (x != null) e.textContent = x; if (p) p.appendChild(e); return e; }
+function tip(el, text) { s("title", {}, el, text); return el; }
+// wrap text into lines of ~maxW px; returns the y after the last line
+function wrap(p, x, y, text, maxW, size = 14, a = {}) {
+  const cw = size * (a.mono ? 0.62 : 0.53), per = Math.max(4, Math.floor(maxW / cw)), words = String(text).split(/\s+/), lines = [];
+  let line = ""; words.forEach(w => { if ((line + " " + w).trim().length > per && line) { lines.push(line); line = w; } else line = (line + " " + w).trim(); }); if (line) lines.push(line);
+  const lh = a.lh || size * 1.3, max = a.max || 99; lines.slice(0, max).forEach((l, i) => s("text", { x, y: y + i * lh, "font-size": size, ...a.attrs }, p, i === max - 1 && lines.length > max ? (l.includes(" ") ? l.replace(/\s*\S*$/, "…") : l.slice(0, -1) + "…") : l));
+  return y + Math.min(lines.length, max) * lh;
+}
+function defs(svg) { const d = s("defs", {}, svg); const m = s("marker", { id: "ah", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, d); s("path", { d: "M0,0L10,5L0,10z", fill: "var(--axis)" }, m); }
+function arrow(p, x1, y1, x2, y2, a = {}) { return s(a.curve ? "path" : "line", a.curve ? { d: `M${x1},${y1} C${a.curve[0]},${a.curve[1]} ${a.curve[2]},${a.curve[3]} ${x2},${y2}`, fill: "none", stroke: a.color || "var(--axis)", "stroke-width": a.w || 2, "marker-end": "url(#ah)", "stroke-dasharray": a.dash } : { x1, y1, x2, y2, stroke: a.color || "var(--axis)", "stroke-width": a.w || 2, "marker-end": "url(#ah)", "stroke-dasharray": a.dash }, p); }
+// a rounded box with a bold title and wrapped subtitle
+function box(p, x, y, w, hh, title, sub, a = {}) {
+  const g = s("g", {}, p), dark = a.dark;
+  s("rect", { x, y, width: w, height: hh, rx: a.rx ?? 10, fill: a.fill || "var(--surface)", stroke: a.stroke || "var(--border)", "stroke-width": a.sw || 1, "stroke-dasharray": a.dash }, g);
+  if (a.bar) s("rect", { x, y, width: 5, height: hh, rx: 2, fill: a.bar }, g);
+  const ty = y + (a.ty || (sub ? 24 : hh / 2 + 6)), tx = a.center ? x + w / 2 : x + 14;
+  if (a.icon) s("text", { x: tx, y: ty, "font-size": 18 }, g, a.icon);
+  s("text", { x: a.icon ? tx + 26 : tx, y: ty, "font-size": a.ts || 15, "font-weight": 650, "text-anchor": a.center ? "middle" : null, style: dark ? "fill:#fff" : null }, g, title);
+  if (sub) { if (a.center) s("text", { x: tx, y: ty + 20, "font-size": a.ss || 12.5, "text-anchor": "middle", style: dark ? "fill:#e8eefc" : "fill:var(--ink2)" }, g, sub); else wrap(g, tx, ty + 20, sub, w - 26, a.ss || 12.5, { attrs: { style: dark ? "fill:#e8eefc" : "fill:var(--ink2)" }, max: a.max || 4 }); }
+  return g;
+}
+function chip(p, x, y, label, a = {}) { const w = a.w || label.length * 7 + 22, g = s("g", {}, p); s("rect", { x, y, width: w, height: 22, rx: 11, fill: a.fill || "var(--surface)", stroke: a.stroke || "var(--border)" }, g); if (a.dot) s("circle", { cx: x + 11, cy: y + 11, r: 4.5, fill: a.dot }, g); s("text", { x: x + (a.dot ? 20 : 11), y: y + 15, "font-size": 12, style: a.ink ? `fill:${a.ink}` : null }, g, label); return w; }
+function legend(p, x, y, items, maxX = 1216) { let cx = x; items.forEach(([n, c, dot]) => { if (cx + 18 + n.length * 6.8 > maxX) { cx = x; y += 20; } if (dot) s("circle", { cx: cx + 6, cy: y - 4, r: 5, fill: c }, p); else s("rect", { x: cx, y: y - 10, width: 12, height: 12, rx: 3, fill: c }, p); s("text", { x: cx + 18, y, "font-size": 12.5, class: "t-ink2" }, p, n); cx += 18 + n.length * 6.8 + 18; }); }
+function bigNum(p, x, y, value, label, a = {}) { s("text", { x, y, "font-size": a.size || 44, "font-weight": 700, style: a.color ? `fill:${a.color}` : null }, p, value); s("text", { x, y: y + 22, "font-size": 13, class: "t-ink2" }, p, label); }
+function rbar(x0, y, w, hh, r = 4) { if (w <= 0) return ""; const rr = Math.min(r, w, hh / 2), x1 = x0 + w; return `M${x0},${y}H${x1 - rr}Q${x1},${y} ${x1},${y + rr}V${y + hh - rr}Q${x1},${y + hh} ${x1 - rr},${y + hh}H${x0}Z`; }
+function stackRow(p, x, y, w, hh, parts) { const tot = sum(parts.map(q => q.n)) || 1; let cx = x; parts.forEach(q => { const ww = w * q.n / tot; if (ww <= 0) return; const g = s("g", {}, p); s("rect", { x: cx, y, width: Math.max(0, ww - 2), height: hh, rx: 3, fill: q.color }, g); if (ww > 34) s("text", { x: cx + ww / 2 - 1, y: y + hh / 2 + 4.5, "font-size": 12, "text-anchor": "middle", style: `fill:${q.ink || "#fff"}` }, g, q.label ?? pct(q.n / tot)); tip(g, `${q.name}: ${q.n}`); cx += ww; }); }
+const runName = k => k && R[k] ? `${R[k].name} · ${R[k].harness}` : "–";
+const colorOf = k => R[k].tier === "frontier" ? TIERC.frontier : R[k].system === "closed_book" && R[k].tier === "open" ? TIERC.open : TIERC.improved;
+
+// ---------- slide frame ----------
+const slides = [];
+function slide(kicker, title, sub, draw, opts = {}) { slides.push({ kicker, title, sub, draw, opts }); }
+function build(sl, i) {
+  const el = h("section", { class: "slide", "aria-label": sl.title }, document.getElementById("stage"));
+  const hd = h("header", {}, el); if (sl.kicker) h("div", { class: "kicker" }, hd, sl.kicker); if (sl.title) h("h2", {}, hd, sl.title); if (sl.sub) h("div", { class: "sub" }, hd, sl.sub);
+  const svg = s("svg", { class: "layer", viewBox: `0 0 ${W} ${H}`, role: "img" }, el); defs(svg);
+  if (sl.opts.mock && D.mock) h("div", { class: "ribbon" }, el, "MOCK DATA");
+  const ft = h("footer", {}, el); h("span", {}, ft, sl.opts.foot || (sl.opts.mock && D.mock ? "Model results are from the offline mock backend: placeholders until real API keys are set." : "Short-video fact-checking · v2")); h("span", {}, ft, `${i + 1} / ${slides.length}`);
+  try { sl.draw(svg, el); } catch (e) { s("text", { x: 64, y: 400, "font-size": 16, style: "fill:var(--ref)" }, svg, "Could not draw: " + e.message); console.error(e); }
+  return el;
+}
+
+// ================= 1. Title =================
+slide("", "", "", svg => {
+  s("text", { x: 64, y: 190, "font-size": 15, "font-weight": 600, style: "fill:var(--s1);letter-spacing:.08em" }, svg, "HACKATHON SUBMISSION · FACT-CHECKING CLAIMS IN SHORT VIDEOS");
+  s("text", { x: 64, y: 250, "font-size": 50, "font-weight": 700 }, svg, "Can an open model fact-check");
+  s("text", { x: 64, y: 310, "font-size": 50, "font-weight": 700 }, svg, "short videos as well as a frontier model?");
+  s("text", { x: 64, y: 355, "font-size": 19, class: "t-ink2" }, svg, "Transcript → claims → evidence → a 4-way verdict with the exact sentence cited");
+  const opens = D.roles_cfg.evaluated.filter(k => MOD[k].tier === "open"), fr = D.roles_cfg.evaluated.filter(k => MOD[k].tier === "frontier");
+  let y = 430; opens.forEach((k, i) => box(svg, 64 + i * 150, y, 138, 46, MOD[k].name, null, { ts: 13, center: true, fill: "var(--surface)" }));
+  const xr = 64 + opens.length * 150 + 10;
+  box(svg, xr, y - 6, 150, 58, "+ harness", "11 features", { fill: "var(--s1)", dark: true, center: true, ts: 15 });
+  box(svg, xr + 165, y - 6, 150, 58, "+ fine-tune", "SFT → DPO", { fill: "var(--s1)", dark: true, center: true, ts: 15 });
+  s("text", { x: xr + 340, y: y + 30, "font-size": 30, "font-weight": 700, class: "t-muted" }, svg, "vs");
+  fr.forEach((k, i) => box(svg, xr + 385, y + i * 52 - 10, 160, 44, MOD[k].name, null, { ts: 13, center: true, fill: "var(--tint2)", stroke: "var(--s2)" }));
+  s("text", { x: 64, y: 600, "font-size": 14, class: "t-ink2" }, svg, `${D.data.test} test claims · ${D.data.videos} YouTube videos · ${D.data.dev} dev claims · ${D.rubric.n}-check rubric · answer key by ${MOD[D.roles_cfg.gt].name} (not evaluated)`);
+  if (D.mock) s("text", { x: 64, y: 628, "font-size": 14, style: "fill:var(--ref)" }, svg, "Every model result in this deck is a mock placeholder until real API keys are set. The data, rubric, pipeline and training data are real.");
+}, { foot: `Generated ${D.generated}` });
+
+// ================= 2. Why =================
+slide("Why this matters", "Viral claims are spoken, and checking them is slow",
+  "A fact-checker has to watch, transcribe, search, read and cite before filing a verdict. The search-and-cite part is the bottleneck, and it's the part a model can do.", svg => {
+  // phone with spoken claim
+  s("rect", { x: 70, y: 175, width: 230, height: 440, rx: 30, fill: "#151515" }, svg);
+  s("rect", { x: 82, y: 195, width: 206, height: 400, rx: 20, fill: "#2a2a28" }, svg);
+  s("circle", { cx: 185, cy: 330, r: 30, fill: "rgba(255,255,255,.15)" }, svg); s("path", { d: "M176,315 L200,330 L176,345 Z", fill: "#fff" }, svg);
+  s("rect", { x: 92, y: 450, width: 186, height: 120, rx: 10, fill: "rgba(0,0,0,.55)" }, svg);
+  wrap(svg, 102, 474, `“${D.example.claim}”`, 166, 13, { attrs: { style: "fill:#fff" }, max: 5 });
+  s("text", { x: 185, y: 600, "font-size": 11, "text-anchor": "middle", style: "fill:#aaa" }, svg, D.example.speaker || "speaker");
+  // manual workflow
+  const steps = [["Watch", "▶", 0], ["Transcribe", "✎", 0], ["Find the claim", "⌕", 0], ["Search", "🔎", 1], ["Read sources", "📄", 1], ["Cite the sentence", "❝", 1], ["File verdict", "✓", 0]];
+  const x0 = 360, y0 = 260, bw = 112, gap = 12;
+  s("text", { x: x0, y: y0 - 40, "font-size": 14, "font-weight": 650, class: "t-ink2" }, svg, "TODAY: ALL MANUAL");
+  steps.forEach(([n, ic, slow], i) => { const x = x0 + i * (bw + gap); box(svg, x, y0, bw, 70, n, null, { center: true, ts: 12, fill: slow ? "var(--tint2)" : "var(--surface)", stroke: slow ? "var(--s2)" : null, ty: 48 }); s("text", { x: x + bw / 2, y: y0 + 26, "font-size": 18, "text-anchor": "middle" }, svg, ic); if (i < steps.length - 1) arrow(svg, x + bw + 1, y0 + 35, x + bw + gap - 1, y0 + 35); });
+  const sx = x0 + 3 * (bw + gap), ex = x0 + 6 * (bw + gap) - gap;
+  s("path", { d: `M${sx},${y0 + 82} v10 H${ex} v-10`, fill: "none", stroke: "var(--s2)", "stroke-width": 2 }, svg);
+  s("text", { x: (sx + ex) / 2, y: y0 + 114, "font-size": 15, "font-weight": 650, "text-anchor": "middle", style: "fill:var(--s2)" }, svg, "the slow part: where a model helps");
+  s("text", { x: x0, y: 450, "font-size": 14, "font-weight": 650, class: "t-ink2" }, svg, "WITH THIS SYSTEM");
+  const auto = [["Transcript clip", "var(--surface)"], ["Claims + questions", "var(--tint1)"], ["Evidence, cited", "var(--tint1)"], ["Verdict + confidence", "var(--tint1)"], ["Analyst reviews", "var(--surface)"]];
+  auto.forEach(([n, f], i) => { const x = x0 + i * 182; box(svg, x, 470, 166, 54, n, null, { center: true, ts: 13.5, fill: f, stroke: f === "var(--tint1)" ? "var(--s1)" : null }); if (i < auto.length - 1) arrow(svg, x + 167, 497, x + 181, 497); });
+  s("text", { x: x0, y: 575, "font-size": 16 }, svg, "Goal: an open model (cheap, self-hostable) that does this as well as a frontier model,");
+  s("text", { x: x0, y: 598, "font-size": 16 }, svg, "measured on claims professional fact-checkers have already labeled.");
+});
+
+// ================= 3. One hard claim =================
+slide("The problem, concretely", "What one claim looks like", "A real test claim: the clip, what the fact-checker asked, and the traps that make a memorised answer wrong.", svg => {
+  const E = D.example;
+  box(svg, 64, 150, 520, 380, "", null, { fill: "#1f1f1d", stroke: "none" });
+  s("text", { x: 84, y: 180, "font-size": 12, style: "fill:#9a9a94;letter-spacing:.08em" }, svg, "TRANSCRIPT EXCERPT (90-SECOND CLIP)");
+  wrap(svg, 84, 208, E.transcript.slice(0, 900) + (E.transcript.length > 900 ? "…" : ""), 480, 13, { attrs: { style: "fill:#e9e9e4" }, max: 17, lh: 18 });
+  box(svg, 64, 548, 520, 80, "Claim", `“${E.claim}”`, { fill: "var(--tint1)", stroke: "var(--s1)", bar: "var(--s1)", max: 2 });
+  // fact-checker side
+  s("text", { x: 630, y: 170, "font-size": 13, "font-weight": 650, class: "t-ink2" }, svg, "WHAT THE FACT-CHECKER ASKED");
+  let y = 186; (E.qa || []).slice(0, 3).forEach((q, i) => { box(svg, 630, y, 586, 82, (t => t.length > 80 ? t.slice(0, 79) + "…" : t)(`Q${i + 1}. ${q.q}`), q.a, { ts: 13, ss: 12, max: 2, bar: "var(--s3)" }); y += 92; });
+  s("text", { x: 630, y: y + 20, "font-size": 13, "font-weight": 650, class: "t-ink2" }, svg, "VERDICT");
+  chip(svg, 700, y + 6, LN[E.label4], { dot: LC[E.label4] }); s("text", { x: 830, y: y + 21, "font-size": 12.5, class: "t-ink2" }, svg, `fact-checker's rating: ${E.gold_raw}`);
+  s("text", { x: 630, y: y + 60, "font-size": 13, "font-weight": 650, class: "t-ink2" }, svg, "TRAPS");
+  let cx = 690; const tn = Object.fromEntries(D.traps.map(t => [t.key, t.name])); (E.traps || []).forEach(t => { cx += chip(svg, cx, y + 46, tn[t] || t, { fill: "var(--tint2)", stroke: "var(--s2)" }) + 8; });
+});
+
+// ================= 4. Traps =================
+slide("The problem, across the test set", "Every claim hides traps a memorised answer falls into",
+  `Trap tags on the ${D.data.test} test claims (a claim can have several). These are what the harness and fine-tune have to handle.`, svg => {
+  const T = D.traps.filter(t => t.n > 0), x0 = 330, x1 = 860, y0 = 160, rh = Math.min(38, 470 / T.length), max = Math.max(...T.map(t => t.n));
+  [0, .25, .5, .75, 1].forEach(f => { const v = Math.round(max * f), x = x0 + (x1 - x0) * f; s("line", { x1: x, x2: x, y1: y0 - 6, y2: y0 + T.length * rh, stroke: "var(--grid)" }, svg); s("text", { x, y: y0 + T.length * rh + 18, "font-size": 11, class: "t-muted", "text-anchor": "middle" }, svg, v); });
+  T.forEach((t, i) => { const y = y0 + i * rh, w = (x1 - x0) * t.n / max, g = s("g", {}, svg); s("text", { x: x0 - 12, y: y + rh / 2 + 4, "font-size": 14, "text-anchor": "end" }, g, t.name); s("path", { d: rbar(x0, y + 5, w, rh - 12), fill: i < 3 ? "var(--s2)" : "var(--seq4)" }, g); s("text", { x: x0 + w + 8, y: y + rh / 2 + 4, "font-size": 13, "font-weight": 600 }, g, `${t.n}`); tip(g, `${t.name}: ${t.why}`); });
+  T.slice(0, 3).forEach((t, i) => box(svg, 920, 160 + i * 150, 296, 134, t.name, t.why, { bar: "var(--s2)", max: 5 }));
+  s("text", { x: 920, y: 630, "font-size": 13, class: "t-ink2" }, svg, `${(sum(T.map(t => t.n)) / D.data.test).toFixed(1)} traps per claim on average`);
+});
+
+// ================= 5. Environment =================
+slide("The environment", "From a YouTube link to a significance test", "Everything is a script with cached inputs and outputs, so a run is reproducible and a rerun is free.", svg => {
+  const cols = [
+    ["Data", "var(--seq1)", [["AVeriTeC", "65 video claims (v1)"], ["ClaimReview feed", `${D.data.sources.claimreview || 0} test + ${D.data.dev} dev, YouTube only`]]],
+    ["Prepare", "var(--seq1)", [["YouTube transcript", "captions, English"], ["Locate the claim", "timestamp or word overlap → 90 s clip"]]],
+    ["Answer key", "var(--tint2)", [[MOD[D.roles_cfg.gt].name, `effort "${D.roles_cfg.gt_effort}": questions, sub-claims, numbers, traps`], ["Fact-checker label", "always the gold verdict"]]],
+    ["Systems", "var(--tint1)", [["7 models", "4 open, 1 fine-tuned, 2 frontier"], ["× harness", "off the shelf vs frozen harness"]]],
+    ["Score", "var(--tint1)", [[`${D.rubric.n} checks · 5 gates`, `${D.rubric.methods.auto || 0} automatic, ${D.rubric.methods.judge || 0} by blind judge`], ["2nd judge on 25%", `${MOD[D.roles_cfg.judge2].name} → Cohen's κ`]]],
+    ["Decide", "var(--tint3)", [["Dev split", "pick features, stop rule"], ["Test split, once", "McNemar, bootstrap, Holm"]]]];
+  const x0 = 64, cw = 182, gap = 15;
+  cols.forEach(([name, fill, items], i) => { const x = x0 + i * (cw + gap); s("text", { x: x + cw / 2, y: 182, "font-size": 13, "font-weight": 700, "text-anchor": "middle", style: "fill:var(--s1);letter-spacing:.06em" }, svg, name.toUpperCase());
+    items.forEach(([t, st], j) => box(svg, x, 200 + j * 150, cw, 130, t, st, { fill, max: 4, ts: 14 }));
+    if (i < cols.length - 1) { arrow(svg, x + cw + 1, 265, x + cw + gap - 1, 265); arrow(svg, x + cw + 1, 415, x + cw + gap - 1, 415); } });
+  s("rect", { x: 64, y: 510, width: 1152, height: 110, rx: 12, fill: "var(--surface)", stroke: "var(--border)" }, svg);
+  [["11 build", "test set"], ["12 ground truth", "answer key"], ["13 run", "a model + features"], ["14 score", `${D.rubric.n} checks`], ["15 iterate", "dev loop → test"], ["17 sft", "SFT / DPO data"], ["18 · 19", "report + deck"]].forEach(([f, d], i) => {
+    const x = 88 + i * 162; s("text", { x, y: 550, "font-size": 14, "font-weight": 650, style: "font-family:ui-monospace,Menlo,monospace" }, svg, f); s("text", { x, y: 572, "font-size": 12.5, class: "t-ink2" }, svg, d); if (i < 6) arrow(svg, x + 140, 545, x + 156, 545); });
+  s("text", { x: 88, y: 604, "font-size": 12, class: "t-muted" }, svg, "Every model call and web fetch is cached on disk; LLM_BACKEND=mock runs the whole pipeline offline.");
+});
+
+// ================= 6. Dataset =================
+slide("The dataset", `${D.data.test} test claims from ${D.data.videos} videos, plus ${D.data.dev} dev claims for iterating`,
+  "Labels come from professional fact-checkers. The test split is looked at once, at the end; every design decision uses the dev split.", svg => {
+  // funnel
+  const F = [["ClaimReview fact-checks with a YouTube link", D.data.candidates + D.data.unmapped], ["Rating maps to a 4-way label", D.data.candidates], ["Transcript fetched and claim found", (D.data.sources.claimreview || 0) + D.data.dev]];
+  s("text", { x: 64, y: 170, "font-size": 13, "font-weight": 650, class: "t-ink2" }, svg, "NEW CLAIMS: FUNNEL");
+  const fmax = F[0][1];
+  F.forEach(([n, v], i) => { const w = Math.max(240, 470 * Math.sqrt(v / fmax)), y = 186 + i * 62, x = 64 + (470 - w) / 2; s("rect", { x, y, width: w, height: 46, rx: 8, fill: `var(--seq${[3, 4, 6][i]})` }, svg); s("text", { x: 64 + 235, y: y + 21, "font-size": 15, "font-weight": 700, "text-anchor": "middle", style: "fill:#fff" }, svg, v.toLocaleString()); s("text", { x: 64 + 235, y: y + 38, "font-size": 11.5, "text-anchor": "middle", style: "fill:#eef4fd" }, svg, n); });
+  box(svg, 64, 386, 470, 56, `+ ${D.data.sources.averitec || 0} AVeriTeC video claims from v1`, "kept as-is so v1 and v2 are comparable", { fill: "var(--tint3)", stroke: "var(--s3)", max: 1 });
+  s("text", { x: 64, y: 478, "font-size": 13, "font-weight": 650, class: "t-ink2" }, svg, "WHO CHECKED THEM");
+  const fc = Object.entries(D.data.fact_checkers).sort((a, b) => b[1] - a[1]), fm = Math.max(...fc.map(x => x[1]));
+  fc.slice(0, 5).forEach(([n, v], i) => { const y = 490 + i * 25; s("text", { x: 200, y: y + 14, "font-size": 12.5, "text-anchor": "end" }, svg, n); s("path", { d: rbar(210, y + 3, 300 * v / fm, 15), fill: "var(--seq4)" }, svg); s("text", { x: 216 + 300 * v / fm, y: y + 15, "font-size": 12 }, svg, v); });
+  // labels
+  s("text", { x: 600, y: 170, "font-size": 13, "font-weight": 650, class: "t-ink2" }, svg, "4-WAY LABEL MIX");
+  legend(svg, 600, 196, L4.map(l => [LN[l], LC[l]]));
+  [["Test", D.data.test_labels], ["Dev", D.data.dev_labels]].forEach(([n, c], i) => { const y = 214 + i * 46; s("text", { x: 600, y: y + 21, "font-size": 14, "font-weight": 600 }, svg, n); stackRow(svg, 650, y, 560, 32, L4.map(l => ({ n: c[l] || 0, color: LC[l], name: LN[l], ink: l === "not_enough_evidence" ? "#111" : "#fff", label: c[l] ? String(c[l]) : "" }))); });
+  // video length histogram
+  s("text", { x: 600, y: 352, "font-size": 13, "font-weight": 650, class: "t-ink2" }, svg, "LENGTH OF THE SOURCE VIDEO (MINUTES)");
+  const bins = [[0, 2, "<2"], [2, 10, "2–10"], [10, 30, "10–30"], [30, 60, "30–60"], [60, 1e9, "60+"]], cnt = bins.map(([a, b]) => D.data.minutes.filter(m => m >= a && m < b).length), cm = Math.max(...cnt);
+  bins.forEach(([, , l], i) => { const x = 610 + i * 118, hh = 170 * cnt[i] / cm; s("rect", { x, y: 545 - hh, width: 96, height: hh, rx: 4, fill: "var(--seq5)" }, svg); s("text", { x: x + 48, y: 540 - hh, "font-size": 13, "font-weight": 600, "text-anchor": "middle" }, svg, cnt[i]); s("text", { x: x + 48, y: 564, "font-size": 12.5, "text-anchor": "middle", class: "t-ink2" }, svg, l); });
+  s("text", { x: 600, y: 600, "font-size": 12.5, class: "t-ink2" }, svg, "Long videos are cut to a 90-second clip around the claim; short ones are used whole.");
+});
+
+// ================= 7. Rubric =================
+slide("How answers are scored", `A ${D.rubric.n}-check rubric with gates and a harm-weighted cost matrix`,
+  "The headline metric, verified accuracy, needs the exact 4-way label, every gate passing, and a citation that really says what is quoted.", svg => {
+  const dims = Object.entries(D.rubric.dims), tot = sum(dims.map(([, d]) => d.weight));
+  s("text", { x: 64, y: 170, "font-size": 13, "font-weight": 650, class: "t-ink2" }, svg, "6 DIMENSIONS (AREA = WEIGHT)");
+  // simple slice-and-dice treemap in 520x300
+  let x = 64, y = 184; const TW = 520, TH = 300, top = dims.slice(0, 3), bot = dims.slice(3), tTop = sum(top.map(([, d]) => d.weight)), hTop = TH * tTop / tot;
+  [[top, y, hTop], [bot, y + hTop, TH - hTop]].forEach(([row, yy, hh]) => { let xx = x; const rt = sum(row.map(([, d]) => d.weight)); row.forEach(([k, d], i) => { const ww = TW * d.weight / rt, g = s("g", {}, svg); s("rect", { x: xx + 2, y: yy + 2, width: ww - 4, height: hh - 4, rx: 8, fill: `var(--seq${[6, 5, 4, 6, 5, 4][dims.findIndex(z => z[0] === k)]})` }, g); s("text", { x: xx + 14, y: yy + 30, "font-size": 16, "font-weight": 700, style: "fill:#fff" }, g, d.name); s("text", { x: xx + 14, y: yy + 50, "font-size": 13, style: "fill:#eef4fd" }, g, `${d.weight}% · ${D.rubric.items[k] || 0} checks`); wrap(g, xx + 14, yy + 72, d.desc, ww - 30, 11.5, { attrs: { style: "fill:#e3edfb" }, max: 3 }); tip(g, d.desc); xx += ww; }); });
+  // gates
+  s("text", { x: 620, y: 170, "font-size": 13, "font-weight": 650, class: "t-ink2" }, svg, "5 GATES: FAIL ANY → SCORE CAPPED AT 25");
+  D.rubric.gates.forEach(([g, t], i) => { const yy = 184 + i * 60; s("rect", { x: 620, y: yy, width: 52, height: 48, rx: 8, fill: "var(--ref)" }, svg); s("text", { x: 646, y: yy + 30, "font-size": 16, "font-weight": 700, "text-anchor": "middle", style: "fill:#fff" }, svg, g); wrap(svg, 684, yy + 20, t, 230, 12.5, { max: 2 }); });
+  // cost matrix
+  s("text", { x: 940, y: 170, "font-size": 13, "font-weight": 650, class: "t-ink2" }, svg, "HARM OF EACH ERROR");
+  const cm = 940, cy = 210, c = 62, ab = { supported: "SUP", refuted: "REF", conflicting: "CON", not_enough_evidence: "NEE" };
+  L4.forEach((l, j) => s("text", { x: cm + 46 + j * c + c / 2, y: cy - 8, "font-size": 11, "text-anchor": "middle", class: "t-ink2" }, svg, ab[l]));
+  L4.forEach((g, i) => { s("text", { x: cm + 40, y: cy + i * c + c / 2 + 4, "font-size": 11, "text-anchor": "end", class: "t-ink2" }, svg, ab[g]); L4.forEach((p, j) => { const v = D.rubric.cost[g][p], st = v ? Math.min(7, 1 + Math.floor(v * 6.999)) : 0; s("rect", { x: cm + 46 + j * c + 1, y: cy + i * c + 1, width: c - 2, height: c - 2, rx: 5, fill: st ? `var(--seq${st})` : "var(--surface)", stroke: "var(--grid)" }, svg); s("text", { x: cm + 46 + j * c + c / 2, y: cy + i * c + c / 2 + 5, "font-size": 13, "text-anchor": "middle", style: `fill:${st >= 4 ? "#fff" : "var(--ink)"}` }, svg, v.toFixed(1)); }); });
+  s("text", { x: cm, y: cy + 4 * c + 22, "font-size": 11.5, class: "t-ink2" }, svg, "rows: truth · columns: answer · 1.0 = a flip");
+  // bottom strip
+  const strip = [["Automatic checks", `${D.rubric.methods.auto || 0}`, "quotes resolve and match, numbers, gates, latency"], ["Blind judge checks", `${D.rubric.methods.judge || 0}`, `${MOD[D.roles_cfg.gt].name} with the answer key`], ["Second judge", "25%", `${MOD[D.roles_cfg.judge2].name}; κ < 0.4 counts half`], ["Calibration", "Brier", "stated confidence vs being right"]];
+  strip.forEach(([a, b, c2], i) => { const xx = 64 + i * 292; s("rect", { x: xx, y: 520, width: 276, height: 96, rx: 10, fill: "var(--surface)", stroke: "var(--border)" }, svg); s("text", { x: xx + 16, y: 560, "font-size": 28, "font-weight": 700, style: "fill:var(--s1)" }, svg, b); s("text", { x: xx + 16, y: 582, "font-size": 13.5, "font-weight": 650 }, svg, a); s("text", { x: xx + 16, y: 601, "font-size": 12, class: "t-ink2" }, svg, c2); });
+});
+
+// ================= 8. Workflow of one claim =================
+slide("How a system answers", "The workflow for one claim", "Each colored step is a feature that can be switched on or off; the example is the claim from slide 3.", svg => {
+  const E = D.example, fz = new Set(D.frozen.flags || []);
+  const steps = [["Transcript clip", null, "90 s of captions around the claim"], ["Extract claim", null, `“${E.claim.slice(0, 70)}${E.claim.length > 70 ? "…" : ""}”`], ["Sub-claims", "decompose", "split compound claims into atomic parts"], ["Verification questions", "questions", E.qa && E.qa[0] ? E.qa[0].q : "who / what / when / how many?"],
+    ["Search", "retrieve", "Wikipedia or Brave; 27 fact-check sites blocked"], ["Number check · rerank", "numcheck", "deterministic: claim figures vs evidence"], ["Label", null, "4-way + confidence + every question answered with a quote"], ["Quote check + repair", "quote_check", "each quote must appear in the source; one repair turn"]];
+  const cw = 268, ch = 150, gx = 26, gy = 60;
+  steps.forEach(([n, f, ex], i) => { const r = Math.floor(i / 4), c = r ? 3 - (i % 4) : i % 4, x = 64 + c * (cw + gx), y = 170 + r * (ch + gy), on = f && fz.has(f);
+    box(svg, x, y, cw, ch, `${i + 1}. ${n}`, ex, { fill: f ? (on ? "var(--tint1)" : "var(--surface)") : "var(--surface)", stroke: on ? "var(--s1)" : f ? "var(--axis)" : null, dash: f && !on ? "5 4" : null, bar: f ? "var(--s1)" : "var(--base)", max: 5 });
+    if (f) chip(svg, x + cw - 98, y + ch - 32, on ? "in frozen" : "optional", { w: 86, fill: on ? "var(--s1)" : "var(--surface)", ink: on ? "#fff" : "var(--ink2)" });
+    if (i < steps.length - 1) { if (r === 0 && i % 4 < 3) arrow(svg, x + cw + 2, y + ch / 2, x + cw + gx - 2, y + ch / 2); else if (r === 1) arrow(svg, x - 2, y + ch / 2, x - gx + 2, y + ch / 2); else arrow(svg, x + cw / 2, y + ch + 2, x + cw / 2, y + ch + gy - 2); } });
+  const ox = 64, oy = 170 + 2 * ch + gy + 22;
+  s("text", { x: ox, y: oy, "font-size": 13, "font-weight": 650, class: "t-ink2" }, svg, "OUTPUT →");
+  let cx = ox + 80; [["verdict", LN[E.label4], LC[E.label4]], ["confidence", "0.0–1.0"], ["questions", "answered + cited"], ["citations", "verbatim sentences"], ["→ scored", `${D.rubric.n} checks`]].forEach(([a, b, c]) => { cx += chip(svg, cx, oy - 15, `${a}: ${b}`, { dot: c || null }) + 10; });
+});
+
+// ================= 9. Model roles =================
+slide("Who does what", "Each model has one job, and the answer-key model is never graded",
+  "The strongest frontier model writes the answer key and judges, so it is excluded from the comparison.", svg => {
+  const C = D.roles_cfg, ev = C.evaluated;
+  // center claim
+  box(svg, 560, 330, 160, 70, "Test claim", "clip + date", { center: true, fill: "var(--surface)", ts: 16 });
+  // left: evaluated
+  s("text", { x: 64, y: 170, "font-size": 13, "font-weight": 650, class: "t-ink2" }, svg, "EVALUATED (ANSWER THE CLAIM)");
+  ev.forEach((k, i) => { const m = MOD[k], y = 186 + i * 58, col = m.tier === "frontier" ? "var(--s2)" : m.tier === "improved" ? "var(--s1)" : "var(--base)"; box(svg, 64, y, 300, 48, m.name, m.tier === "frontier" ? "frontier" : m.tier === "improved" ? "GLM 5.3 + our fine-tune" : k === C.base ? "open · base model for iteration" : "open", { bar: col, ts: 14, ss: 11.5, ty: 21 }); arrow(svg, 556, 365, 368, y + 24, { color: "var(--grid)", w: 1.5 }); });
+  // right: answer key + judges
+  box(svg, 860, 170, 356, 104, `${MOD[C.gt].name} · effort "${C.gt_effort}"`, "Writes the answer key: gold questions + answers, sub-claims, true numbers, traps, difficulty. Flags label disagreements.", { fill: "var(--tint2)", stroke: "var(--s2)", max: 3 });
+  chip(svg, 1090, 180, "not evaluated", { fill: "var(--ref)", ink: "#fff", stroke: "none", w: 112 });
+  box(svg, 860, 300, 356, 84, `Judge: ${MOD[C.gt].name}`, "Blind to which model answered; scores the judge checks against the answer key.", { fill: "var(--tint2)", stroke: "var(--s2)", max: 2 });
+  box(svg, 860, 410, 356, 84, `Second judge: ${MOD[C.judge2].name}`, "Re-scores 25% of answers → Cohen's κ per check.", { fill: "var(--surface)", max: 2 });
+  box(svg, 860, 520, 356, 84, `Idea generator: ${MOD[C.ideation].name}`, "Reads the dev failures, proposes new harness / training ideas (references checked on arXiv).", { fill: "var(--tint3)", stroke: "var(--s3)", max: 2 });
+  arrow(svg, 722, 365, 856, 342); arrow(svg, 1038, 274, 1038, 298); arrow(svg, 1038, 384, 1038, 408, { dash: "4 4" });
+  arrow(svg, 856, 562, 520, 640, { curve: [700, 640, 600, 650], dash: "4 4", color: "var(--s3)" }); s("text", { x: 520, y: 668, "font-size": 12, style: "fill:var(--s3)" }, svg, "new ideas → next build cycle");
+});
+
+// ================= 10. What we explored =================
+slide("What we explored", `${D.ideas.length} ideas for closing the gap: harness changes and post-training`,
+  "Each tile: the idea, its status, and the seconds it adds per claim or its build time. Hover a tile for its diagram and reference.", svg => {
+  const st = { built: ["var(--s1)", "#fff"], "built (v1)": ["var(--seq4)", "#fff"], data: ["var(--s3)", "#fff"], untested: ["var(--seq3)", "#111"], planned: ["var(--surface)", "var(--ink2)"], rejected: ["var(--grid)", "var(--muted)"] };
+  const groups = [["HARNESS", D.ideas.filter(i => i.type === "harness"), 64], ["POST-TRAINING", D.ideas.filter(i => i.type !== "harness"), 724]];
+  groups.forEach(([n, list, x0]) => { const cols = n === "HARNESS" ? 4 : 3, tw = n === "HARNESS" ? 152 : 160, th = 84; s("text", { x: x0, y: 168, "font-size": 13, "font-weight": 700, style: "fill:var(--s1);letter-spacing:.06em" }, svg, `${n} (${list.length})`);
+    list.forEach((it, i) => { const x = x0 + (i % cols) * (tw + 8), y = 180 + Math.floor(i / cols) * (th + 8), [f, ink] = st[it.status] || st.planned, g = s("g", {}, svg);
+      s("rect", { x, y, width: tw, height: th, rx: 8, fill: f, stroke: "var(--border)", "stroke-dasharray": it.status === "planned" ? "4 3" : null }, g);
+      wrap(g, x + 10, y + 20, it.name, tw - 18, 12.5, { attrs: { style: `fill:${ink};font-weight:650` }, max: 3, lh: 15 });
+      const fe = it.feature && D.features[it.feature]; s("text", { x: x + 10, y: y + th - 12, "font-size": 11.5, style: `fill:${ink}` }, g, fe ? `${fe.added_s >= 0 ? "+" : ""}${fe.added_s} s/claim · ${it.status}` : `${it.build_hours ? it.build_hours + " h build · " : ""}${it.status}`);
+      tip(g, `${it.name}\n${it.steps.join(" → ")}\nRef: ${it.ref}`); }); });
+  legend(svg, 64, 650, [["built + measured", "var(--s1)"], ["data built", "var(--s3)"], ["needs dev runs", "var(--seq3)"], ["planned", "var(--surface)"], ["rejected", "var(--grid)"]]);
+});
+
+// ================= 11. Methodology =================
+slide("Methodology", "Iterate on dev, freeze, look at the test split once",
+  "Changing the system after looking at test results would make noise look significant, so every choice is made on the dev split with a stop rule written down first.", svg => {
+  const rows = [["0", "Baselines", "GLM 5.3 off the shelf, and with the starting harness (search + questions + quote check)"], ["1", "One feature at a time", `${Object.keys(D.features).length - 3} candidate features, each added alone; kept if gain > 0 with P(gain > 0) ≥ 0.8`], ["2", "Combine every positive feature", "and keep the best single feature if it beats the combination"], ["3", "Fine-tuned model", "SFT → DPO checkpoint on the best harness; kept only if it helps on dev"], ["4", "Open-model ideas + stop rule", "Kimi K3 reads the failures; stop when gain ≥ 3 pts with P ≥ 0.95"]];
+  rows.forEach(([n, t, d], i) => { const y = 170 + i * 84; s("circle", { cx: 92, cy: y + 30, r: 22, fill: "var(--s1)" }, svg); s("text", { x: 92, y: y + 36, "font-size": 17, "font-weight": 700, "text-anchor": "middle", style: "fill:#fff" }, svg, n); box(svg, 130, y, 560, 62, t, d, { max: 2, ts: 15 }); if (i < rows.length - 1) arrow(svg, 92, y + 54, 92, y + 82); });
+  s("rect", { x: 740, y: 170, width: 220, height: 400, rx: 14, fill: "var(--tint1)", stroke: "var(--s1)" }, svg);
+  s("text", { x: 850, y: 200, "font-size": 14, "font-weight": 700, "text-anchor": "middle", style: "fill:var(--s1)" }, svg, "DEV SPLIT");
+  bigNum(svg, 790, 270, String(D.data.dev), "claims; all choices here", { color: "var(--s1)" });
+  wrap(svg, 760, 330, "Gains are measured on the rubric score with a video-level bootstrap (more power than accuracy on a small split).", 190, 12.5, { max: 6 });
+  arrow(svg, 962, 370, 1000, 370, { w: 3 }); s("text", { x: 980, y: 356, "font-size": 12, "text-anchor": "middle", class: "t-ink2" }, svg, "freeze");
+  s("rect", { x: 1004, y: 170, width: 212, height: 400, rx: 14, fill: "var(--tint3)", stroke: "var(--s3)" }, svg);
+  s("text", { x: 1110, y: 200, "font-size": 14, "font-weight": 700, "text-anchor": "middle", style: "fill:var(--s3)" }, svg, "TEST SPLIT");
+  bigNum(svg, 1040, 270, String(D.data.test), "claims; one look", { color: "var(--s3)" });
+  wrap(svg, 1024, 330, "Every evaluated model runs off the shelf and with the frozen harness. McNemar + video bootstrap, Holm-corrected over the pre-registered comparisons.", 180, 12.5, { max: 7 });
+  s("text", { x: 1024, y: 540, "font-size": 13, "font-weight": 650 }, svg, `test looks so far: ${D.iteration.test_looks}`);
+});
+
+// ================= 12. Picking the best =================
+slide("Picking the winner", "What each idea did on the dev split", "Gain in rubric points over the starting harness, with 95% intervals. Blue = kept. The combination of every kept feature was frozen.", svg => {
+  const R1 = (D.iteration.rounds.find(r => r.round.startsWith("1")) || { entries: [] }).entries, R2 = (D.iteration.rounds.find(r => r.round.startsWith("2")) || { entries: [] }).entries, R3 = (D.iteration.rounds.find(r => r.round.startsWith("3")) || { entries: [] }).entries;
+  const rowsD = [...R1.map(e => ({ n: D.features[e.feature]?.name || e.feature, g: e.gain, lo: e.lo, hi: e.hi, p: e.p_gain, keep: e.positive, sec: e.added_seconds })), ...R2.filter(e => e.combined).map(e => ({ n: "COMBINED: " + e.combined.map(f => D.features[f]?.name || f).join(" + "), g: e.gain, lo: e.lo, hi: e.hi, p: e.p_gain, keep: true, comb: true })), ...R3.map(e => ({ n: "Fine-tuned model (SFT + DPO) on the best harness", g: e.gain, lo: e.lo, hi: e.hi, p: e.p_gain, keep: e.gain > 0 && e.p_gain >= .8, ft: true }))];
+  if (!rowsD.length) { s("text", { x: 64, y: 300, "font-size": 18 }, svg, "Run 15_iterate_v2.py to fill this slide."); return; }
+  const lim = Math.max(.05, ...rowsD.map(r => Math.max(Math.abs(r.lo), Math.abs(r.hi)))) * 1.1, x0 = 470, x1 = 1000, X = v => x0 + (x1 - x0) * (v + lim) / (2 * lim), rh = Math.min(48, 440 / rowsD.length), y0 = 180;
+  [-lim, -lim / 2, 0, lim / 2, lim].forEach(t => { s("line", { x1: X(t), x2: X(t), y1: y0 - 10, y2: y0 + rowsD.length * rh, stroke: Math.abs(t) < 1e-9 ? "var(--ink2)" : "var(--grid)" }, svg); s("text", { x: X(t), y: y0 + rowsD.length * rh + 18, "font-size": 11.5, "text-anchor": "middle", class: "t-muted" }, svg, `${t > 0 ? "+" : ""}${(100 * t).toFixed(0)}`); });
+  s("text", { x: X(0), y: y0 + rowsD.length * rh + 38, "font-size": 12, "text-anchor": "middle", class: "t-ink2" }, svg, "rubric points vs starting harness");
+  s("text", { x: 1030, y: y0 - 14, "font-size": 12, class: "t-ink2" }, svg, "P(gain>0)"); s("text", { x: 1120, y: y0 - 14, "font-size": 12, class: "t-ink2" }, svg, "added s/claim");
+  rowsD.forEach((r, i) => { const y = y0 + i * rh + rh / 2, col = r.keep ? "var(--s1)" : "var(--base)", g = s("g", {}, svg);
+    if (r.comb || r.ft) s("rect", { x: 64, y: y - rh / 2 + 2, width: 1152, height: rh - 4, rx: 6, fill: r.comb ? "var(--tint1)" : "var(--tint3)" }, g);
+    wrap(g, 76, y + 5 - (r.n.length > 52 ? 8 : 0), r.n, 380, 13.5, { max: 2, attrs: { style: r.keep ? "font-weight:650" : null } });
+    s("line", { x1: X(r.lo), x2: X(r.hi), y1: y, y2: y, stroke: col, "stroke-width": 3, "stroke-linecap": "round" }, g); s("circle", { cx: X(r.g), cy: y, r: 7, fill: col, stroke: "var(--page)", "stroke-width": 2 }, g);
+    s("text", { x: X(r.hi) + 10, y: y + 4, "font-size": 12.5, "font-weight": 600 }, g, `${r.g >= 0 ? "+" : ""}${(100 * r.g).toFixed(1)}`);
+    s("text", { x: 1030, y: y + 4, "font-size": 13 }, g, r.p.toFixed(2)); s("text", { x: 1120, y: y + 4, "font-size": 13 }, g, r.sec != null ? `${r.sec >= 0 ? "+" : ""}${r.sec.toFixed(1)}` : "");
+    tip(g, `${r.n}: ${(100 * r.g).toFixed(1)} pts [${(100 * r.lo).toFixed(1)}, ${(100 * r.hi).toFixed(1)}], P = ${r.p.toFixed(2)}`); });
+}, { mock: true });
+
+// ================= 13. Ranking =================
+slide("Ranking", "Every model, off the shelf and with the frozen harness", "Verified accuracy on the test split with 95% video-level bootstrap intervals.", svg => {
+  const ks = Object.keys(R).sort((a, b) => R[b].verified - R[a].verified), x0 = 520, x1 = 1120, top = Math.min(1, Math.max(.3, ...ks.map(k => R[k].hi)) + .05), X = v => x0 + (x1 - x0) * v / top, rh = Math.min(30, 440 / ks.length), y0 = 172;
+  for (let t = 0; t <= top + 1e-9; t += top > .6 ? .2 : .1) { s("line", { x1: X(t), x2: X(t), y1: y0 - 6, y2: y0 + ks.length * rh, stroke: "var(--grid)" }, svg); s("text", { x: X(t), y: y0 + ks.length * rh + 18, "font-size": 11.5, "text-anchor": "middle", class: "t-muted" }, svg, pct(t)); }
+  ks.forEach((k, i) => { const r = R[k], y = y0 + i * rh + rh / 2, col = colorOf(k), g = s("g", {}, svg), best = k === RO.improved;
+    s("text", { x: 76, y: y + 4, "font-size": 13.5, "font-weight": best ? 700 : 400 }, g, `${i + 1}.`); s("text", { x: 104, y: y + 4, "font-size": 13.5, "font-weight": best ? 700 : 400 }, g, r.name); s("text", { x: 300, y: y + 4, "font-size": 12.5, class: "t-ink2" }, g, r.harness);
+    s("line", { x1: X(r.lo), x2: X(r.hi), y1: y, y2: y, stroke: col, "stroke-width": 2.5, "stroke-linecap": "round" }, g); s("circle", { cx: X(r.verified), cy: y, r: 6.5, fill: col, stroke: "var(--page)", "stroke-width": 2 }, g); s("text", { x: X(r.hi) + 8, y: y + 4, "font-size": 12.5, "font-weight": 600 }, g, pct(r.verified, 1));
+    tip(g, `${runName(k)}: ${pct(r.verified, 1)} [${pct(r.lo, 1)}, ${pct(r.hi, 1)}]; exact ${pct(r.exact, 1)}; rubric ${r.score.toFixed(1)}`); });
+  legend(svg, 76, 662, [["open, off the shelf", TIERC.open, 1], ["open + harness / fine-tune", TIERC.improved, 1], ["frontier", TIERC.frontier, 1]]);
+}, { mock: true });
+
+// ================= 14. Top open vs improved vs frontier =================
+slide("Head to head", "Best open model, our improved system, and the best frontier model", "Three numbers per system, the six rubric dimensions, and how each one fails.", svg => {
+  const cols = [["Best open, off the shelf", RO.top_open, "var(--base)"], ["Improved open (frozen)", RO.improved, "var(--s1)"], ["Best frontier, off the shelf", RO.frontier_best, "var(--s2)"]].filter(c => c[1]);
+  cols.forEach(([t, k, c], i) => { const x = 64 + i * 390, r = R[k]; s("rect", { x, y: 160, width: 370, height: 150, rx: 12, fill: "var(--surface)", stroke: c, "stroke-width": k === RO.improved ? 2.5 : 1 }, svg);
+    s("text", { x: x + 18, y: 186, "font-size": 13, "font-weight": 650, style: `fill:${c}` }, svg, t.toUpperCase()); s("text", { x: x + 18, y: 206, "font-size": 13, class: "t-ink2" }, svg, runName(k));
+    [[pct(r.verified, 1), "verified"], [pct(r.exact, 1), "exact 4-way"], [r.score.toFixed(1), "rubric /100"]].forEach(([v, l], j) => bigNum(svg, x + 18 + j * 118, 258, v, l, { size: 30 })); s("text", { x: x + 18, y: 298, "font-size": 12, class: "t-muted" }, svg, `${r.seconds.toFixed(1)} model-s · ${r.calls.toFixed(1)} calls per claim`); });
+  // dims grouped bars
+  const dims = Object.entries(D.rubric.dims), x0 = 64, y0 = 350, gw = 1152 / dims.length;
+  s("text", { x: x0, y: y0, "font-size": 13, "font-weight": 650, class: "t-ink2" }, svg, "RUBRIC DIMENSIONS (SHARE OF CHECKS PASSED)");
+  dims.forEach(([d, info], j) => { const gx = x0 + j * gw; s("text", { x: gx + gw / 2, y: y0 + 160, "font-size": 12.5, "text-anchor": "middle" }, svg, info.name);
+    cols.forEach(([, k, c], i) => { const v = R[k].dims[d] || 0, hh = 120 * v, bx = gx + gw / 2 - 48 + i * 33; s("rect", { x: bx, y: y0 + 140 - hh, width: 28, height: hh, rx: 3, fill: c }, svg); s("text", { x: bx + 14, y: y0 + 135 - hh, "font-size": 10.5, "text-anchor": "middle" }, svg, pct(v)); }); });
+  // failure stacked
+  const FM = [["verified", "var(--s1)"], ["right label, not verified", "var(--seq3)"], ["missed the misleading part", "var(--con)"], ["wrong abstention", "var(--nee)"], ["over-claim", "var(--warn)"], ["wrong label", "var(--s2)"], ["fabricated citation", "var(--seq7)"], ["flip (supported <-> refuted)", "var(--ref)"], ["unparseable output", "#333"]];
+  s("text", { x: x0, y: 545, "font-size": 13, "font-weight": 650, class: "t-ink2" }, svg, "HOW EACH ANSWER ENDS UP");
+  cols.forEach(([t, k], i) => { const y = 558 + i * 28; s("text", { x: x0 + 230, y: y + 15, "font-size": 12.5, "text-anchor": "end" }, svg, t); stackRow(svg, x0 + 240, y, 912, 20, FM.map(([f, c]) => ({ n: R[k].failures[f] || 0, color: c, name: f, ink: ["var(--seq3)", "var(--nee)", "var(--warn)"].includes(c) ? "#111" : "#fff" }))); });
+  legend(svg, x0 + 240, 654, FM.filter(([f]) => cols.some(([, k]) => R[k].failures[f])).map(([f, c]) => [f, c]));
+}, { mock: true });
+
+// ================= 15. Fine-tuning, exactly =================
+slide("Fine-tuning, exactly", "Train the open model on the fact-checkers' own research", `SFT on ${(D.sft?.train || 0).toLocaleString()} examples in the exact v2 task format, then DPO on citation quality from dev runs. GRPO with a verifiable reward is the planned third stage.`, svg => {
+  const S = D.sft || {}, drop = sum(Object.values(S.dropped || {}));
+  const st = [["AVeriTeC", `${(S.averitec_rows || 0).toLocaleString()} claims with fact-checker Q&A`, "var(--seq1)"], ["Leakage filter", `−${drop} (test/dev claims, videos, articles, near-duplicates)`, "var(--seq1)"], ["SFT data", `${(S.train || 0).toLocaleString()} train · ${(S.val || 0).toLocaleString()} val · ${S.augmented || 0} evidence-dropout`, "var(--seq1)"], ["LoRA SFT", "GLM 5.3 · rank 32 · 2 epochs · lr 1e-4 · ~1–1.5 h", "var(--s1)"], ["DPO", `${D.dpo_pairs} pairs: verified answer beats a flipped / fabricated one · 1 epoch · lr 5e-6`, "var(--s1)"], ["GRPO (planned)", "reward = right label × gates pass × quote verified", "var(--surface)"]];
+  st.forEach(([t, d, f], i) => { const x = 64 + i * 194; box(svg, x, 160, 180, 112, t, d, { fill: f, dark: f === "var(--s1)", max: 4, dash: i === 5 ? "5 4" : null, ts: 14.5 }); if (i < st.length - 1) arrow(svg, x + 181, 216, x + 193, 216); });
+  const P = D.sft_example.prompt, T = D.sft_example.target;
+  s("text", { x: 64, y: 310, "font-size": 13, "font-weight": 650, class: "t-ink2" }, svg, "ONE REAL TRAINING RECORD");
+  s("rect", { x: 64, y: 322, width: 560, height: 310, rx: 10, fill: "#1f1f1d" }, svg);
+  s("text", { x: 82, y: 346, "font-size": 11.5, style: "fill:#9a9a94;letter-spacing:.06em" }, svg, "INPUT (THE v2 LABELING PROMPT, SHORTENED)");
+  const pick = P.split("\n").filter(l => /^(VIDEO DATE|CLAIM|- |\[\d\])/.test(l)).slice(0, 7).map(l => l.length > 92 ? l.slice(0, 91) + "…" : l);
+  let y = 370; pick.forEach(l => { y = wrap(svg, 82, y, l, 520, 12, { mono: true, attrs: { style: "fill:#e9e9e4;font-family:ui-monospace,Menlo,monospace" }, max: 2, lh: 16 }) + 6; });
+  s("text", { x: 82, y: Math.min(y + 8, 620), "font-size": 11.5, style: "fill:#9a9a94" }, svg, "+ label definitions, date rule, JSON schema");
+  arrow(svg, 628, 476, 660, 476, { w: 3 });
+  s("rect", { x: 664, y: 322, width: 552, height: 310, rx: 10, fill: "var(--tint1)", stroke: "var(--s1)" }, svg);
+  s("text", { x: 682, y: 346, "font-size": 11.5, style: "fill:var(--s1);letter-spacing:.06em;font-weight:700" }, svg, "TARGET (BUILT FROM THE FACT-CHECKER'S WORK)");
+  chip(svg, 682, 360, `label: ${LN[T.label] || T.label}`, { dot: LC[T.label] }); chip(svg, 830, 360, `confidence: ${T.confidence}`);
+  y = 410; (T.questions || []).slice(0, 2).forEach(q => { s("text", { x: 682, y, "font-size": 12, "font-weight": 650 }, svg, "Q: " + (q.q.length > 70 ? q.q.slice(0, 69) + "…" : q.q)); y += 18; (q.citations || []).slice(0, 1).forEach(c => { y = wrap(svg, 692, y, `[${c.id}] “${c.quote}”`, 500, 12, { attrs: { style: "fill:var(--ink2);font-style:italic" }, max: 3, lh: 16 }); }); y += 10; });
+  s("text", { x: 682, y: y + 4, "font-size": 12, "font-weight": 650 }, svg, "Rationale (fact-checker's justification)"); wrap(svg, 682, y + 22, T.rationale, 510, 12, { max: 4, lh: 16, attrs: { style: "fill:var(--ink2)" } });
+}, { foot: D.mock ? "Training data is real; the fine-tuning jobs have not run yet (they need a Fireworks key)." : null });
+
+// ================= 16. Harness, exactly =================
+slide("The harness, exactly", "What the frozen harness does on every claim", `The frozen system: ${MOD[D.frozen.model]?.name || D.frozen.model} with ${(D.frozen.flags || []).map(f => D.features[f]?.name || f).join(" + ")}.`, svg => {
+  const fz = D.frozen.flags || [], order = ["router", "decompose", "questions", "retrieve", "date_guard", "rerank", "numcheck", "label", "quote_check", "adaptive_vote", "critic"];
+  const what = { router: ["Triage", "1 cheap call: is this checkable?"], decompose: ["Sub-claims", "1 call → atomic parts, each labeled; weakest part decides"], questions: ["Questions", "1 call → 2–5 verification questions"], retrieve: ["Search", "2–4 queries per question; fact-check sites blocked; numbered passages"], date_guard: ["Date guard", "drop passages dated after the video"], rerank: ["Rerank", "BM25 → top 10 passages, no model call"], numcheck: ["Number check", "deterministic: claim figures vs evidence"], label: ["Label", "1 call → JSON: 4-way label, confidence, Q&A with quotes"], quote_check: ["Quote check", "every quote must match the source (4-word shingles); one repair turn if not"], adaptive_vote: ["Vote if unsure", "confidence < 0.7 → 4 more samples"], critic: ["Critic", "1 call audits label vs evidence"] };
+  const steps = order.filter(f => f === "label" || fz.includes(f)), n = steps.length, bw = Math.min(200, (1152 - (n - 1) * 18) / n);
+  steps.forEach((f, i) => { const x = 64 + i * (bw + 18), [t, d] = what[f], sec = D.features[f]?.added_s; box(svg, x, 170, bw, 160, t, d, { fill: f === "label" ? "var(--s1)" : "var(--tint1)", dark: f === "label", stroke: "var(--s1)", max: 6 }); if (sec != null) chip(svg, x + 12, 296, `≈ +${sec} s`, { fill: "var(--surface)" }); if (i < n - 1) arrow(svg, x + bw + 2, 250, x + bw + 16, 250); });
+  s("text", { x: 64, y: 380, "font-size": 13, "font-weight": 650, class: "t-ink2" }, svg, "THE RULES THE LABELER IS GIVEN (VERBATIM)");
+  const rules = D.sft_example.prompt.split("\n").filter(l => /^(Judge as of|Answer every|- (supported|refuted|conflicting|not_enough_evidence):)/.test(l));
+  let y = 404; rules.forEach(l => { y = wrap(svg, 64, y, l, 640, 13, { max: 3, lh: 18 }) + 6; });
+  s("text", { x: 760, y: 380, "font-size": 13, "font-weight": 650, class: "t-ink2" }, svg, "WHAT IT RETURNS");
+  s("rect", { x: 760, y: 392, width: 456, height: 236, rx: 10, fill: "#1f1f1d" }, svg);
+  ['{ "label": "refuted",', '  "confidence": 0.9,', '  "subclaims": [{ "text": "...", "label": "..." }],', '  "questions": [{ "q": "...",', '      "answer": "...",', '      "citations": [{ "id": 2, "quote": "..." }] }],', '  "rationale": "2-4 sentences",', '  "citations": [...] }'].forEach((l, i) => s("text", { x: 778, y: 420 + i * 25, "font-size": 13, style: "fill:#e9e9e4;font-family:ui-monospace,Menlo,monospace" }, svg, l));
+  const fr = R[RO.improved]; if (fr) s("text", { x: 64, y: 640, "font-size": 13, class: "t-ink2" }, svg, `Measured on test: ${fr.seconds.toFixed(1)} model-seconds and ${fr.calls.toFixed(1)} calls per claim${D.mock ? " (mock timings)" : ""}.`);
+});
+
+// ================= 17. Each method vs baseline and frontier =================
+slide("What each method adds", "From the open baseline toward the frontier, one method at a time", "Left: GLM 5.3 as each method is added, against frontier reference lines. Right: what the same frozen harness does for every model.", svg => {
+  const steps = [["Off the shelf", RO.base_off], ["+ search, questions, quote check", RO.base_rag], ["+ " + (D.frozen.flags || []).filter(f => !["retrieve", "questions", "quote_check"].includes(f)).map(f => D.features[f]?.name || f).join(" + ") || "frozen harness", RO.base_frozen], ["+ fine-tune (SFT + DPO)", RO.ft_frozen]].filter(x => x[1] && R[x[1]]);
+  const x0 = 64, y0 = 170, ch = 360, cw = 600, top = Math.min(1, Math.max(.3, ...Object.values(R).map(r => r.verified)) + .08), Y = v => y0 + ch - ch * v / top;
+  for (let t = 0; t <= top + 1e-9; t += top > .6 ? .2 : .1) { s("line", { x1: x0 + 40, x2: x0 + cw, y1: Y(t), y2: Y(t), stroke: "var(--grid)" }, svg); s("text", { x: x0 + 32, y: Y(t) + 4, "font-size": 11.5, "text-anchor": "end", class: "t-muted" }, svg, pct(t)); }
+  const bw = (cw - 60) / steps.length; let prev = null;
+  steps.forEach(([n, k], i) => { const v = R[k].verified, x = x0 + 50 + i * bw, g = s("g", {}, svg);
+    if (prev == null) s("rect", { x: x + 8, y: Y(v), width: bw - 16, height: Y(0) - Y(v), rx: 4, fill: "var(--base)" }, g);
+    else { const up = v >= prev; s("rect", { x: x + 8, y: Y(Math.max(v, prev)), width: bw - 16, height: Math.max(2, Math.abs(Y(v) - Y(prev))), rx: 4, fill: up ? "var(--s1)" : "var(--ref)" }, g); s("line", { x1: x - bw + 8 + bw - 16, x2: x + 8, y1: Y(prev), y2: Y(prev), stroke: "var(--axis)", "stroke-dasharray": "3 3" }, svg); }
+    s("text", { x: x + bw / 2, y: Y(Math.max(v, prev ?? 0)) - 8, "font-size": 13, "font-weight": 650, "text-anchor": "middle" }, g, prev == null ? pct(v, 1) : pp(v - prev));
+    wrap(g, x + 8, Y(0) + 20, n, bw - 12, 12, { max: 3 }); tip(g, `${runName(k)}: ${pct(v, 1)}`); prev = v; });
+  [[RO.frontier_best, "best frontier, off the shelf", "var(--s2)"], [RO.frontier_harness, "best frontier + same harness", "var(--s2)"]].forEach(([k, n, c], i) => { if (!k || !R[k]) return; const y = Y(R[k].verified); s("line", { x1: x0 + 40, x2: x0 + cw, y1: y, y2: y, stroke: c, "stroke-width": 2, "stroke-dasharray": i ? "6 4" : null }, svg); const ly = y0 + ch + 70 + i * 22; s("line", { x1: x0 + 40, x2: x0 + 76, y1: ly - 4, y2: ly - 4, stroke: c, "stroke-width": 2, "stroke-dasharray": i ? "6 4" : null }, svg); s("text", { x: x0 + 84, y: ly, "font-size": 12.5, class: "t-ink2" }, svg, `${n}: ${pct(R[k].verified, 1)}`); });
+  // dumbbells per model
+  const ms = D.roles_cfg.evaluated.filter(m => R[`test/${m}/closed_book`] || R[`test/${m}/${D.frozen.name}`]), dx0 = 880, dx1 = 1190, DX = v => dx0 + (dx1 - dx0) * v / top, rh = Math.min(52, 380 / ms.length);
+  s("text", { x: 720, y: y0 - 4, "font-size": 13, "font-weight": 650, class: "t-ink2" }, svg, "SAME HARNESS ON EVERY MODEL");
+  ms.forEach((m, i) => { const y = y0 + 24 + i * rh, a = R[`test/${m}/closed_book`], b = R[`test/${m}/${D.frozen.name}`], c = MOD[m].tier === "frontier" ? "var(--s2)" : "var(--s1)";
+    s("text", { x: 868, y: y + 4, "font-size": 12.5, "text-anchor": "end", "font-weight": MOD[m].tier === "improved" ? 650 : 400 }, svg, MOD[m].name);
+    if (a && b) s("line", { x1: DX(a.verified), x2: DX(b.verified), y1: y, y2: y, stroke: c, "stroke-width": 2.5, "stroke-opacity": .6 }, svg);
+    if (a) s("circle", { cx: DX(a.verified), cy: y, r: 6, fill: "var(--page)", stroke: MOD[m].tier === "frontier" ? "var(--s2)" : "var(--base)", "stroke-width": 2.5 }, svg);
+    if (b) { s("circle", { cx: DX(b.verified), cy: y, r: 7, fill: c, stroke: "var(--page)", "stroke-width": 2 }, svg); if (a) s("text", { x: Math.max(DX(a.verified), DX(b.verified)) + 12, y: y + 4, "font-size": 12, "font-weight": 600 }, svg, pp(b.verified - a.verified)); } });
+  legend(svg, 720, y0 + ch + 60, [["off the shelf", "var(--base)", 1], ["frozen harness", "var(--s1)", 1]]);
+}, { mock: true });
+
+// ================= 18. Significance + next =================
+slide("Is it real?", "Every pre-registered comparison, corrected for multiple testing", "McNemar exact test on verified accuracy, Holm-adjusted. Green = significant gain, red = significant loss, gray = can't tell.", svg => {
+  const F = D.family; if (!F.length) return;
+  const lim = Math.max(.1, ...F.map(f => Math.abs(f.gap))) * 1.25, x0 = 560, x1 = 960, X = v => x0 + (x1 - x0) * (v + lim) / (2 * lim), rh = Math.min(44, 380 / F.length), y0 = 180;
+  [-lim, 0, lim].forEach(t => { s("line", { x1: X(t), x2: X(t), y1: y0 - 8, y2: y0 + F.length * rh, stroke: t === 0 ? "var(--ink2)" : "var(--grid)" }, svg); s("text", { x: X(t), y: y0 + F.length * rh + 18, "font-size": 11.5, "text-anchor": "middle", class: "t-muted" }, svg, `${t > 0 ? "+" : ""}${(100 * t).toFixed(0)} pp`); });
+  s("text", { x: 990, y: y0 - 14, "font-size": 12, class: "t-ink2" }, svg, "better / worse"); s("text", { x: 1110, y: y0 - 14, "font-size": 12, class: "t-ink2" }, svg, "Holm p");
+  F.forEach((f, i) => { const y = y0 + i * rh + rh / 2, sig = f.holm < .05, col = !sig ? "var(--base)" : f.gap > 0 ? "var(--s3)" : "var(--ref)";
+    s("text", { x: 64, y: y - 3, "font-size": 13, "font-weight": 650 }, svg, f.why); s("text", { x: 64, y: y + 13, "font-size": 12, class: "t-ink2" }, svg, `improved vs ${runName(f.b)}`);
+    s("rect", { x: Math.min(X(0), X(f.gap)), y: y - 9, width: Math.abs(X(f.gap) - X(0)), height: 18, rx: 4, fill: col }, svg);
+    s("text", { x: X(f.gap) + (f.gap >= 0 ? 8 : -8), y: y + 4, "font-size": 12.5, "font-weight": 600, "text-anchor": f.gap >= 0 ? "start" : "end" }, svg, pp(f.gap));
+    s("text", { x: 990, y: y + 4, "font-size": 13 }, svg, `${f.better} / ${f.worse}`); s("text", { x: 1110, y: y + 4, "font-size": 13, "font-weight": sig ? 700 : 400 }, svg, f.holm >= .001 ? f.holm.toFixed(3) : f.holm.toExponential(1)); });
+  const yN = y0 + F.length * rh + 50;
+  s("text", { x: 64, y: yN, "font-size": 13, "font-weight": 650, class: "t-ink2" }, svg, "TO TURN THIS INTO REAL RESULTS");
+  [["API keys", "Fireworks secret + OpenRouter key in .env"], ["Answer key", "12_ground_truth_v2.py"], ["Fine-tune", "17_sft_v2.py launch → SFT2_MODEL_ID"], ["Iterate", "15_iterate_v2.py (dev → freeze → test once)"], ["Present", "19_deck_v2.py regenerates this deck"]].forEach(([a, b], i) => { const x = 64 + i * 232; box(svg, x, yN + 12, 216, 64, a, b, { ts: 14, ss: 12, max: 2, bar: "var(--s1)" }); if (i < 4) arrow(svg, x + 217, yN + 44, x + 231, yN + 44); });
+}, { mock: true });
+
+// ---------- navigation ----------
+const els = slides.map(build);
+let cur = 0;
+function fit() { const sc = Math.min(innerWidth / W, innerHeight / H) * 0.98; els.forEach(e => e.style.transform = `scale(${sc})`); }
+function go(i) { cur = Math.max(0, Math.min(els.length - 1, i)); els.forEach((e, j) => e.classList.toggle("on", j === cur)); document.getElementById("pos").textContent = `${cur + 1} / ${els.length}`; try { history.replaceState(null, "", "#" + (cur + 1)); } catch (e) { /* file:// */ } }
+addEventListener("keydown", e => { if (["ArrowRight", "PageDown", " "].includes(e.key)) go(cur + 1); if (["ArrowLeft", "PageUp"].includes(e.key)) go(cur - 1); if (e.key === "Home") go(0); if (e.key === "End") go(els.length - 1); });
+document.getElementById("prev").addEventListener("click", () => go(cur - 1)); document.getElementById("next").addEventListener("click", () => go(cur + 1));
+const fromHash = () => (parseInt(location.hash.replace(/^#\/?/, "")) || 1) - 1;
+addEventListener("hashchange", () => { if (fromHash() !== cur) go(fromHash()); });
+addEventListener("resize", fit); fit(); go(fromHash());
+window.go = go;
+</script>
+</body>
+</html>

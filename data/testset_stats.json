@@ -1,0 +1,42 @@
+{
+  "video_claims": 166,
+  "videos": 75,
+  "dropped": {
+    "non-YouTube (needs ASR)": 26,
+    "YouTube link without a video ID": 2,
+    "no transcript: IpBlocked": 4,
+    "no transcript: no English transcript": 2,
+    "claim not found in transcript": 12,
+    "no transcript: VideoUnavailable": 9,
+    "no transcript: TranscriptsDisabled": 15,
+    "no transcript: VideoUnplayable": 31
+  },
+  "kept_claims": 65,
+  "kept_clips": 38,
+  "kept_videos": 28,
+  "labels": {
+    "supported": 24,
+    "contradicted": 25,
+    "unverified": 16
+  },
+  "labels_raw": {
+    "Supported": 24,
+    "Refuted": 25,
+    "Conflicting Evidence/Cherrypicking": 6,
+    "Not Enough Evidence": 10
+  },
+  "located_by": {
+    "url timestamp": 20,
+    "lexical match": 39,
+    "whole video": 6
+  },
+  "claims_per_video": {
+    "1": 19,
+    "3": 2,
+    "2": 4,
+    "20": 1,
+    "5": 1,
+    "7": 1
+  },
+  "clip_seconds_median": 90.0
+}

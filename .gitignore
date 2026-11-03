@@ -1,0 +1,14 @@
+# secrets
+.env
+# caches and re-downloadable inputs
+.cache/
+__pycache__/
+data/raw/
+data/transcripts/
+data/transcripts_suspect/
+# run outputs: keep only the HTML reports
+results/
+results_mock/*
+!results_mock/*.html
+results_v2_mock/*
+!results_v2_mock/*.html

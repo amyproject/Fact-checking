@@ -1,0 +1,22 @@
+{
+  "averitec_rows": 3568,
+  "dropped": {
+    "same video as a test claim": 9,
+    "same fact-check article as a test claim": 43,
+    "is a test claim": 65,
+    "wording overlaps a test claim (Jaccard >= 0.5)": 3,
+    "decisive label but no citable gold passage": 1036
+  },
+  "examples_before_cap": 2412,
+  "majority_cap": 1221,
+  "train": 2171,
+  "val": 241,
+  "labels_train": {
+    "unverified": 724,
+    "contradicted": 938,
+    "supported": 509
+  },
+  "augmented_unverified": 292,
+  "prompt_chars_median": 2533,
+  "seed": 0
+}

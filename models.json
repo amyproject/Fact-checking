@@ -1,0 +1,233 @@
+{
+  "_note": "Model IDs and $/1M-token prices must be checked against the Fireworks model library and OpenRouter before a real run; the IDs below follow each provider's naming pattern but have not been called yet. A null price means cost is reported as tokens instead.",
+  "models": [
+    {
+      "key": "deepseek-v4.1-flash",
+      "name": "DeepSeek V4.1 Flash",
+      "tier": "open",
+      "provider": "fireworks",
+      "id": "accounts/fireworks/models/deepseek-v4p1-flash",
+      "price_in": null,
+      "price_out": null,
+      "why": "Document understanding and a strong baseline"
+    },
+    {
+      "key": "qwen3.7-plus",
+      "name": "Qwen3.7 Plus",
+      "tier": "open",
+      "provider": "fireworks",
+      "id": "accounts/fireworks/models/qwen3p7-plus",
+      "price_in": null,
+      "price_out": null,
+      "why": "Document understanding and long context"
+    },
+    {
+      "key": "kimi-k3",
+      "name": "Kimi K3",
+      "tier": "open",
+      "provider": "fireworks",
+      "id": "accounts/fireworks/models/kimi-k3",
+      "price_in": null,
+      "price_out": null,
+      "why": "Long-context reasoning and memo synthesis"
+    },
+    {
+      "key": "glm-5.3",
+      "name": "GLM 5.3",
+      "tier": "open",
+      "provider": "fireworks",
+      "id": "accounts/fireworks/models/glm-5p3",
+      "price_in": null,
+      "price_out": null,
+      "why": "General reasoning and long context; base model for the fine-tune"
+    },
+    {
+      "key": "glm-5.3-ft",
+      "name": "GLM 5.3 + fact-check LoRA",
+      "tier": "improved",
+      "provider": "fireworks",
+      "id": "env:SFT_MODEL_ID",
+      "price_in": null,
+      "price_out": null,
+      "why": "GLM 5.3 after supervised fine-tuning on held-out AVeriTeC claims (07_sft_data.py, 08_sft_train.py)"
+    },
+    {
+      "key": "glm-5.3-ft2",
+      "name": "GLM 5.3 + fact-check LoRA v2",
+      "tier": "improved",
+      "provider": "fireworks",
+      "id": "env:SFT2_MODEL_ID",
+      "price_in": null,
+      "price_out": null,
+      "why": "GLM 5.3 after SFT v2 (4-way labels, verification QA, calibrated confidence) and DPO on citation quality (17_sft_v2.py)"
+    },
+    {
+      "key": "claude-opus-5.5",
+      "name": "Claude Opus 5.5",
+      "tier": "frontier",
+      "provider": "openrouter",
+      "id": "anthropic/claude-opus-5.5",
+      "price_in": null,
+      "price_out": null,
+      "why": "Frontier reference"
+    },
+    {
+      "key": "gpt-6.1-terra-pro",
+      "name": "GPT-6.1 Terra Pro",
+      "tier": "frontier",
+      "provider": "openrouter",
+      "id": "openai/gpt-6.1-terra-pro",
+      "price_in": null,
+      "price_out": null,
+      "why": "Frontier reference"
+    },
+    {
+      "key": "gemini-4-argon",
+      "name": "Gemini 4 Argon",
+      "tier": "frontier",
+      "provider": "openrouter",
+      "id": "google/gemini-4-argon",
+      "price_in": null,
+      "price_out": null,
+      "why": "Frontier reference"
+    }
+  ],
+  "judge": "claude-opus-5.5",
+  "base_open": "glm-5.3",
+  "systems": {
+    "closed_book": {
+      "name": "Closed-book",
+      "kind": "baseline",
+      "desc": "Off-the-shelf model, no tools; may cite URLs from memory (the scorer fetches them)"
+    },
+    "rag": {
+      "name": "A: search + cite",
+      "kind": "harness",
+      "desc": "2-3 search queries, label from numbered passages, quote the backing sentence"
+    },
+    "rag_qa": {
+      "name": "B: questions + search",
+      "kind": "harness",
+      "desc": "2-4 verification questions, search each, label"
+    },
+    "rag_qa_verify": {
+      "name": "C: B + quote check",
+      "kind": "harness",
+      "desc": "B, then a deterministic check that every quote is verbatim in its passage; one repair turn if not"
+    },
+    "agent": {
+      "name": "D: iterative search",
+      "kind": "harness",
+      "desc": "C, but the model may ask for up to 2 more rounds of searches before it labels"
+    },
+    "vote": {
+      "name": "E: C x5 vote",
+      "kind": "harness",
+      "desc": "C sampled 5 times at temperature 0.7; majority label, citations from a majority sample"
+    }
+  },
+  "matrix": {
+    "_note": "Which (model, system) pairs run_all.py runs. Every model gets the baseline and the final harness; the base open model gets the full ablation.",
+    "all_models": [
+      "closed_book",
+      "rag_qa_verify"
+    ],
+    "base_open": [
+      "closed_book",
+      "rag",
+      "rag_qa",
+      "rag_qa_verify",
+      "agent",
+      "vote"
+    ],
+    "glm-5.3-ft": [
+      "rag_qa_verify"
+    ]
+  },
+  "final_system": "rag_qa_verify",
+  "v2": {
+    "_note": "Ground truth comes from one frontier model at maximum reasoning effort; that model also judges, and is never evaluated (it wrote the answer key). Override with GT_MODEL / GT_EFFORT.",
+    "ground_truth_model": "claude-opus-5.5",
+    "ground_truth_reasoning": {
+      "effort": "high"
+    },
+    "judge": "claude-opus-5.5",
+    "second_judge": "qwen3.7-plus",
+    "second_judge_share": 0.25,
+    "ideation_model": "kimi-k3",
+    "evaluated": [
+      "deepseek-v4.1-flash",
+      "qwen3.7-plus",
+      "kimi-k3",
+      "glm-5.3",
+      "glm-5.3-ft2",
+      "gpt-6.1-terra-pro",
+      "gemini-4-argon"
+    ],
+    "base_open": "glm-5.3",
+    "features": {
+      "retrieve": {
+        "name": "Search + cite",
+        "added_s": 4.0
+      },
+      "questions": {
+        "name": "Verification questions",
+        "added_s": 2.0
+      },
+      "quote_check": {
+        "name": "Verbatim quote check + repair",
+        "added_s": 1.0
+      },
+      "decompose": {
+        "name": "Atomic sub-claims",
+        "added_s": 3.0
+      },
+      "numcheck": {
+        "name": "Deterministic number check",
+        "added_s": 0.0
+      },
+      "rerank": {
+        "name": "BM25 passage rerank",
+        "added_s": 0.5
+      },
+      "router": {
+        "name": "Checkability router (skip retrieval when it can't help)",
+        "added_s": -1.5
+      },
+      "adaptive_vote": {
+        "name": "Extra samples only when unsure",
+        "added_s": 2.5
+      },
+      "date_guard": {
+        "name": "Drop evidence dated after the video",
+        "added_s": 0.0
+      },
+      "critic": {
+        "name": "Open-model critic pass",
+        "added_s": 3.0
+      }
+    },
+    "systems": {
+      "closed_book": [],
+      "rag": [
+        "retrieve",
+        "questions",
+        "quote_check"
+      ]
+    },
+    "candidate_features": [
+      "decompose",
+      "numcheck",
+      "rerank",
+      "router",
+      "adaptive_vote",
+      "date_guard",
+      "critic"
+    ],
+    "stopping": {
+      "min_dev_gain": 0.03,
+      "min_prob_gain": 0.8,
+      "max_rounds": 6
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "averitec_rows": 3568,
+  "dropped": {
+    "same video as a held-out claim": 10,
+    "same fact-check article": 43,
+    "held-out claim": 65,
+    "wording overlaps a held-out claim": 3
+  },
+  "train": 2548,
+  "val": 283,
+  "labels": {
+    "supported": 731,
+    "refuted": 1054,
+    "not_enough_evidence": 551,
+    "conflicting": 212
+  },
+  "augmented": 298,
+  "majority_cap": 1207,
+  "questions_per_example": 2.53
+}

@@ -1,0 +1,1349 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fact-checking short videos: open models vs frontier</title>
+<style>
+.viz-root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface-1: #fcfcfb;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --sys-base: #898781;
+  --lab-supported: #2a78d6; --lab-unverified: #a3a29a; --lab-contradicted: #e34948;
+  --div-neg: #e34948; --div-mid: #f0efec; --div-pos: #2a78d6;
+  --wash: rgba(42,120,214,0.10); --good-text: #006300; --bad-text: #b3261e; --warn: #fab219;
+  --seq-1: #cde2fb; --seq-2: #9ec5f4; --seq-3: #6da7ec; --seq-4: #3987e5; --seq-5: #256abf; --seq-6: #184f95; --seq-7: #0d366b;
+  --mark-bg: rgba(250,178,25,0.35);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface-1: #1a1a19;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --sys-base: #8a8984;
+    --lab-supported: #3987e5; --lab-unverified: #6b6a64; --lab-contradicted: #e66767;
+    --div-neg: #e66767; --div-mid: #383835; --div-pos: #3987e5;
+    --wash: rgba(57,135,229,0.14); --good-text: #0ca30c; --bad-text: #e66767;
+    --seq-1: #104281; --seq-2: #184f95; --seq-3: #1c5cab; --seq-4: #256abf; --seq-5: #3987e5; --seq-6: #6da7ec; --seq-7: #b7d3f6;
+    --mark-bg: rgba(250,178,25,0.28);
+  }
+}
+:root[data-theme="dark"] .viz-root {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface-1: #1a1a19;
+  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --sys-base: #8a8984;
+  --lab-supported: #3987e5; --lab-unverified: #6b6a64; --lab-contradicted: #e66767;
+  --div-neg: #e66767; --div-mid: #383835; --div-pos: #3987e5;
+  --wash: rgba(57,135,229,0.14); --good-text: #0ca30c; --bad-text: #e66767;
+  --seq-1: #104281; --seq-2: #184f95; --seq-3: #1c5cab; --seq-4: #256abf; --seq-5: #3987e5; --seq-6: #6da7ec; --seq-7: #b7d3f6;
+  --mark-bg: rgba(250,178,25,0.28);
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+.viz-root { font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--page); color: var(--text-primary); min-height: 100vh; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 0 32px 72px; }
+.top { position: sticky; top: 0; z-index: 10; background: var(--page); border-bottom: 1px solid var(--grid); }
+.top .wrap { padding-top: 14px; padding-bottom: 0; }
+.titlebar { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+h1 { font-size: 21px; font-weight: 600; margin: 0 0 2px; }
+.sub { color: var(--text-secondary); font-size: 13px; }
+.muted { color: var(--text-muted); }
+nav.tabs { display: flex; gap: 2px; margin-top: 10px; flex-wrap: wrap; }
+nav.tabs button { border: 0; background: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 8px 12px; font-weight: 500; color: var(--text-secondary); }
+nav.tabs button[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--text-primary); }
+nav.tabs button:hover { background: none; color: var(--text-primary); }
+section.tab { display: none; padding-top: 18px; }
+section.tab.on { display: block; }
+h2 { font-size: 17px; font-weight: 600; margin: 34px 0 8px; }
+h3 { font-size: 14px; font-weight: 600; margin: 0; }
+h4 { font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+p { margin: 6px 0 10px; max-width: 880px; }
+.prose li { margin: 3px 0; max-width: 860px; }
+.banner { border: 1px solid var(--border); background: var(--surface-1); border-left: 4px solid var(--warn); padding: 10px 14px; border-radius: 8px; margin: 14px 0 4px; font-size: 13px; }
+.callout { border-left: 3px solid var(--axis); padding: 6px 12px; margin: 10px 0; color: var(--text-secondary); background: var(--surface-1); border-radius: 0 8px 8px 0; max-width: 900px; }
+.filters { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding: 8px 0 12px; border-bottom: 1px solid var(--grid); margin-bottom: 6px; position: sticky; top: 92px; background: var(--page); z-index: 6; }
+.filters label { font-size: 12px; color: var(--text-secondary); display: flex; gap: 7px; align-items: center; }
+select, button, input[type=search] { font: inherit; font-size: 13px; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px; }
+button { cursor: pointer; }
+button:hover, select:hover { background: var(--grid); }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; }
+.seg button[aria-pressed="true"] { background: var(--text-primary); color: var(--surface-1); }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid .wide { grid-column: 1 / -1; }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px 14px; min-width: 0; scroll-margin-top: 150px; }
+.card.flash { box-shadow: 0 0 0 3px var(--warn); transition: box-shadow .3s; }
+.card-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.card .desc { color: var(--text-secondary); font-size: 12.5px; margin: 3px 0 10px; }
+.card .toggle { font-size: 12px; padding: 3px 8px; white-space: nowrap; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--text-secondary); margin: 2px 0 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.legend i.dot { border-radius: 50%; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+.tick { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+.lbl { font-size: 12px; fill: var(--text-secondary); }
+.lbl-strong { font-size: 12px; fill: var(--text-primary); font-weight: 600; }
+.val { font-size: 11px; fill: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.mark { outline: none; transition: opacity .12s; }
+.mark:hover, .mark:focus { opacity: .78; }
+.hit { fill: transparent; }
+.kpis { display: grid; gap: 16px; grid-template-columns: 1.5fr repeat(3, minmax(0, 1fr)); }
+@media (max-width: 900px) { .kpis { grid-template-columns: 1fr; } }
+.tile .label { font-size: 12.5px; color: var(--text-secondary); display: flex; align-items: center; gap: 7px; }
+.tile .value { font-size: 30px; font-weight: 600; margin: 4px 0 2px; }
+.tile.hero .value { font-size: 50px; line-height: 1.05; }
+.tile .delta { font-size: 12.5px; color: var(--text-secondary); }
+.verdict { display: inline-flex; gap: 5px; align-items: center; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 8px; border: 1px solid var(--border); white-space: nowrap; }
+.verdict.good { color: var(--good-text); }
+.verdict.bad { color: var(--bad-text); }
+.verdict.nss { color: var(--text-secondary); }
+table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.data th { text-align: left; font-weight: 600; color: var(--text-secondary); border-bottom: 1px solid var(--axis); padding: 6px 8px; position: sticky; top: 0; background: var(--surface-1); vertical-align: bottom; }
+table.data td { border-bottom: 1px solid var(--grid); padding: 6px 8px; vertical-align: top; font-variant-numeric: tabular-nums; }
+.tablewrap { max-height: 460px; overflow: auto; }
+.chip { display: inline-flex; gap: 5px; align-items: center; white-space: nowrap; font-size: 12px; }
+.chip .sw { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.tag { display: inline-block; font-size: 11.5px; border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; margin: 2px 4px 2px 0; color: var(--text-secondary); background: var(--page); }
+.ok { color: var(--good-text); font-weight: 600; }
+.no { color: var(--bad-text); font-weight: 600; }
+.na { color: var(--text-muted); }
+.status { font-size: 11.5px; font-weight: 600; border-radius: 4px; padding: 1px 6px; border: 1px solid var(--border); white-space: nowrap; }
+.status.built, .status.data { color: var(--good-text); }
+.status.untested { color: var(--text-secondary); }
+.status.planned { color: var(--text-muted); }
+.status.rejected { color: var(--bad-text); }
+/* claims tab */
+.claims-layout { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1000px) { .claims-layout { grid-template-columns: 1fr; } }
+.claim-list { max-height: calc(100vh - 220px); overflow: auto; position: sticky; top: 150px; }
+.claim-item { padding: 9px 10px; border-bottom: 1px solid var(--grid); cursor: pointer; border-radius: 6px; }
+.claim-item:hover { background: var(--page); }
+.claim-item[aria-selected="true"] { background: var(--page); box-shadow: inset 3px 0 0 var(--text-primary); }
+.claim-item .t { font-size: 13px; }
+.claim-item .m { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+.detail h2 { margin-top: 0; font-size: 18px; }
+.transcript { font-size: 13px; line-height: 1.7; color: var(--text-secondary); max-height: 220px; overflow: auto; border: 1px solid var(--grid); border-radius: 8px; padding: 10px 12px; background: var(--page); }
+.transcript mark { background: var(--mark-bg); color: var(--text-primary); border-radius: 2px; padding: 0 1px; }
+.trail { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.trail div { border: 1px solid var(--grid); border-radius: 8px; padding: 8px 10px; background: var(--page); font-size: 12.5px; }
+.trail b { display: block; font-size: 11.5px; color: var(--text-muted); font-weight: 500; }
+.items-grid { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 3px; margin-top: 6px; }
+.items-grid span { font-size: 10.5px; text-align: center; border-radius: 3px; padding: 2px 0; border: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+.items-grid span.p { background: var(--seq-2); color: #0b0b0b; border-color: transparent; }
+.items-grid span.f { background: var(--div-neg); color: #fff; border-color: transparent; }
+.cite { margin: 4px 0 0; padding-left: 8px; border-left: 2px solid var(--grid); color: var(--text-secondary); word-break: break-word; font-size: 12px; }
+details > summary { cursor: pointer; color: var(--text-secondary); font-size: 12.5px; }
+.flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.flow .step { border: 1px solid var(--border); background: var(--surface-1); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; max-width: 210px; }
+.flow .step b { display: block; font-size: 12.5px; }
+.flow .arrow { color: var(--text-muted); }
+#tip { position: fixed; pointer-events: none; z-index: 30; background: var(--surface-1); border: 1px solid var(--border); box-shadow: 0 6px 20px rgba(0,0,0,.14); border-radius: 8px; padding: 8px 10px; font-size: 12px; min-width: 150px; max-width: 340px; display: none; }
+#tip .t { color: var(--text-secondary); margin-bottom: 4px; }
+#tip .r { display: flex; align-items: center; gap: 7px; margin-top: 2px; }
+#tip .r b { font-weight: 600; font-variant-numeric: tabular-nums; }
+#tip .r i { width: 12px; height: 2px; display: inline-block; border-radius: 1px; flex: none; }
+#tip .r span { color: var(--text-secondary); }
+a { color: inherit; }
+code { font-size: 12px; background: var(--grid); padding: 1px 4px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="viz-root">
+<div class="top"><div class="wrap">
+  <div class="titlebar">
+    <div>
+      <h1>Fact-checking claims in short videos: can a tuned open model beat frontier models?</h1>
+      <div class="sub" id="meta"></div>
+    </div>
+    <button id="theme" type="button">Light / dark</button>
+  </div>
+  <nav class="tabs" role="tablist" id="tabs"></nav>
+</div></div>
+
+<div class="wrap">
+<div id="banner"></div>
+
+<!-- ============================ SUBMISSION ============================ -->
+<section class="tab" id="tab-submission" data-title="Submission">
+  <p id="tldr" style="font-size:15px"></p>
+  <div class="kpis" id="sub-kpis"></div>
+
+  <h2>Step 1: The task, and why it matters</h2>
+  <p><b>The job.</b> A trust-and-safety analyst or newsroom fact-checker watches a viral clip, writes down what was claimed, searches for evidence, and files a verdict with sources. Finding and quoting sources is the slow part, and it's the part this system does: <b>transcript → checkable claims → retrieved sources → a label (supported / contradicted / unverified) with a quoted sentence as evidence.</b> The analyst still makes the call.</p>
+  <table class="data" style="max-width:960px">
+    <thead><tr><th></th><th>Short-video fact-checking (this project)</th></tr></thead>
+    <tbody>
+      <tr><td>Who does it</td><td>Platform trust-and-safety teams, members of the International Fact-Checking Network (IFCN), newsroom verification desks</td></tr>
+      <tr><td>Why AI hasn't solved it</td><td>Claims are spoken, so they have to come out of a transcript first. They refer to a specific date and place, often outside the US. And a verdict is only useful with a source the analyst can check, and models invent sources.</td></tr>
+      <tr><td>Why an open model</td><td>Thousands of claims a day through a cheap model; transcripts and verdicts stay on infrastructure you control; the weights can be fine-tuned on your own fact-checkers' past work</td></tr>
+      <tr><td>The data</td><td>AVeriTeC (Schlichtkrull et al., NeurIPS 2023): real claims with labels, justifications and the fact-checkers' own research questions</td></tr>
+    </tbody>
+  </table>
+  <p><b>Size the value with the assumptions written out.</b> Suppose an analyst spends ~20 minutes finding and quoting sources per claim, and a source-backed verdict cuts that to ~5 minutes. At 30 claims a day, 230 working days a year and the system's source-backed accuracy <span data-k="impr_metric"></span>, that's <span data-k="hours_saved"></span> hours saved per analyst per year. Replace these with numbers from a real fact-checking team before quoting them.</p>
+
+  <h2>Step 2: A locked test set</h2>
+  <p><b>65 claims from 38 YouTube clips (28 videos), each labeled by a professional fact-checker.</b> We kept the AVeriTeC claims whose original post was a video, fetched the transcript, and cut long videos into ~90 s windows around each claim so every case looks like a short video. The set was locked before any model ran. The <a href="#claims">Claims tab</a> shows why each claim was selected and what makes it hard.</p>
+  <div class="grid">
+    <div class="card" id="s-funnel"></div>
+    <div class="card" id="s-traps"></div>
+  </div>
+  <div class="callout"><b>Check the labels before trusting the eval.</b> AVeriTeC has four labels and the brief asks for three. Supported → supported, Refuted → contradicted, Not Enough Evidence and Conflicting Evidence/Cherrypicking → unverified. 63 of the 65 test claims come from AVeriTeC's <i>train</i> split, so the fine-tuning data drops them, their videos, their fact-check articles and near-duplicate wordings (step 4).</div>
+
+  <h2>Step 3: Baselines: open and frontier, off the shelf</h2>
+  <p>Every model gets the same prompts and settings at temperature 0. The off-the-shelf baseline answers from memory and may cite URLs it remembers; the scorer fetches every URL and checks the quote is really on the page. Open models run on Fireworks, frontier models through OpenRouter.</p>
+  <div class="grid"><div class="card wide" id="s-models"></div></div>
+
+  <h2>Step 4: The improvement: harness and post-training</h2>
+  <p>We tried the cheap ideas first (prompting and retrieval), then fine-tuning. Each idea started as a guess about why the baseline was failing. The <a href="#improvements">Improvements tab</a> lists all <span data-k="n_ideas"></span> ideas, which ones are built, and the full fine-tuning recipe.</p>
+  <div class="flow" id="s-flow"></div>
+  <p><b>Post-training.</b> A LoRA fine-tune of <span data-k="base_name"></span> on <span data-k="sft_train"></span> examples built from the fact-checkers' own research: their questions, their answers with source URLs, and their justifications. Each example is placed in the exact prompt harness C sends at test time. 10% of the examples have their evidence removed and are labeled "unverified", to teach abstention.</p>
+
+  <h2>Step 5: Results on the same test set</h2>
+  <div class="grid"><div class="card wide" id="s-tiers"></div></div>
+
+  <h2>Step 6: Is the gain real?</h2>
+  <p><b>Luck moves the score.</b> On 65 claims, a system with a true 50% accuracy scores anywhere from ~38% to ~62% by chance. A gain counts only when it passes two tests, after correcting for running <span data-k="n_family"></span> comparisons:</p>
+  <ul class="prose">
+    <li><b>McNemar</b> (accuracy metrics) or a <b>paired permutation test</b> (rubric score). These look only at claims where the two systems differ and ask whether the split is lopsided enough to rule out a coin flip.</li>
+    <li><b>Cluster bootstrap</b>: resample whole videos 5,000 times. The 95% interval for the gap must exclude zero. Claims from one video share a speaker and topic, so resampling single claims would make the interval look tighter than it is.</li>
+    <li><b>Holm correction</b>: we test <span data-k="n_family"></span> planned comparisons at once, so each p-value is adjusted for the chance that at least one passes by luck.</li>
+  </ul>
+  <div class="grid"><div class="card wide" id="s-sig"></div></div>
+  <div class="callout" id="power-note"></div>
+
+  <h2>How this project maps to the judging rubric</h2>
+  <table class="data" id="judging"></table>
+
+  <h2>Submission checklist</h2>
+  <ul class="prose">
+    <li><b>Public repo:</b> the scripts in run order, <code>models.json</code>, the locked <code>data/</code>, results and this report. Check it in an incognito window.</li>
+    <li><b>Demo video under 120 s</b> (under 60 s is better): script in the <a href="#demo">Demo tab</a>.</li>
+    <li><b>Submit by 4:30 PM</b>; uploads must finish processing before then.</li>
+  </ul>
+  <h2>Disclosure</h2>
+  <p>Built with Claude Code as an AI coding assistant. Data: AVeriTeC, under its dataset license (non-commercial; check the dataset card before reuse). Fact-check labels and justifications are the fact-checkers'; model outputs are scored against them.</p>
+</section>
+
+<!-- ============================ RESULTS ============================ -->
+<section class="tab" id="tab-results" data-title="Results">
+  <div class="filters" role="group" aria-label="Filters for every chart on this tab">
+    <label>Claims <select id="f-slice"><option value="all">All claims</option><option value="nobig">Without the largest video</option></select></label>
+    <label>Claim type <select id="f-type"></select></label>
+    <label>Trap <select id="f-trap"></select></label>
+    <label>Metric
+      <span class="seg" id="f-metric">
+        <button type="button" data-v="sb" aria-pressed="true">Source-backed acc</button>
+        <button type="button" data-v="label" aria-pressed="false">Label acc</button>
+        <button type="button" data-v="rubric" aria-pressed="false">Rubric score</button>
+      </span>
+    </label>
+    <span class="sub" id="f-count"></span>
+  </div>
+  <h2>Headline</h2>
+  <div class="kpis card" id="r-hero" style="background:none;border:0;padding:0"></div>
+  <h2>Open vs frontier vs improved</h2>
+  <div class="grid">
+    <div class="card wide" id="r-tiers"></div>
+    <div class="card wide" id="r-board"></div>
+    <div class="card wide" id="r-winrate"></div>
+  </div>
+  <h2>Is it statistically significant?</h2>
+  <div class="grid">
+    <div class="card wide" id="r-sig"></div>
+    <div class="card" id="r-mcnemar"></div>
+    <div class="card" id="r-gaps"></div>
+    <div class="card" id="r-boot"></div>
+    <div class="card" id="r-power"></div>
+  </div>
+  <h2>Rubric</h2>
+  <div class="grid">
+    <div class="card wide" id="r-areas"></div>
+    <div class="card wide" id="r-items"></div>
+  </div>
+  <h2>How the systems fail</h2>
+  <div class="grid">
+    <div class="card wide" id="r-confusion"></div>
+    <div class="card" id="r-mix"></div>
+    <div class="card" id="r-failures"></div>
+    <div class="card" id="r-funnel"></div>
+    <div class="card" id="r-coverage"></div>
+  </div>
+  <h2>Cost and ablation</h2>
+  <div class="grid">
+    <div class="card" id="r-cost"></div>
+    <div class="card" id="r-waterfall"></div>
+    <div class="card wide" id="r-example"></div>
+  </div>
+  <h2>Breakdowns</h2>
+  <div class="grid">
+    <div class="card" id="r-type"></div>
+    <div class="card" id="r-trap"></div>
+    <div class="card" id="r-country"></div>
+    <div class="card" id="r-gold"></div>
+    <div class="card" id="r-extract"></div>
+    <div class="card" id="s-sft"></div>
+    <div class="card wide" id="r-video"></div>
+  </div>
+</section>
+
+<!-- ============================ CLAIMS ============================ -->
+<section class="tab" id="tab-claims" data-title="Claims">
+  <p class="sub">Every test claim: why it was selected, the traps that make it hard, what the fact-checker found, and how every system answered, with all 50 rubric checks.</p>
+  <div class="claims-layout">
+    <div class="card" style="padding:12px">
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px">
+        <input type="search" id="c-q" placeholder="Search claims, speakers" aria-label="Search claims">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <select id="c-trap" aria-label="Filter by trap"></select>
+          <select id="c-gold" aria-label="Filter by label"><option value="">Any label</option><option>supported</option><option>contradicted</option><option>unverified</option></select>
+          <select id="c-show" aria-label="Filter by outcome"></select>
+        </div>
+        <span class="sub" id="c-count"></span>
+      </div>
+      <div class="claim-list" id="c-list" role="listbox" aria-label="Claims"></div>
+    </div>
+    <div class="card detail" id="c-detail"></div>
+  </div>
+</section>
+
+<!-- ============================ VIDEOS ============================ -->
+<section class="tab" id="tab-videos" data-title="Videos">
+  <p class="sub">Every video behind an AVeriTeC video claim: the 28 that made the test set and the ones that didn't, with each claim's fate. Click a video to see its clips and claims; click a kept claim to open it on the Claims tab. Real data.</p>
+  <div class="kpis" id="v-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))"></div>
+  <div class="grid" style="margin-top:16px">
+    <div class="card" id="v-status"></div>
+    <div class="card" id="v-platform"></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div class="toolbar" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <input type="search" id="v-q" placeholder="Search speakers, claims, video IDs" aria-label="Search videos" style="min-width:260px">
+      <select id="v-status-f" aria-label="Filter by status"></select>
+      <select id="v-platform-f" aria-label="Filter by platform"></select>
+      <span class="sub" id="v-count" style="align-self:center"></span>
+    </div>
+    <div class="tablewrap" style="max-height:none"><table class="data" id="v-table"></table></div>
+  </div>
+</section>
+
+<!-- ============================ RUBRIC ============================ -->
+<section class="tab" id="tab-rubric" data-title="Rubric">
+  <h2 style="margin-top:6px">How one answer is scored: 50 checks in 5 areas</h2>
+  <p>Every (claim, system) answer gets the 50 checks below. <b>20 are deterministic</b>, computed from the answer and the fetched sources. <b>30 go to a judge model</b> (<span data-k="judge"></span>) in one call per answer. The judge is <b>blind</b>: it sees the answer, the evidence and the fact-checker's reference, never the model or system name. A check can be N/A (a numeric check on a claim with no number); N/A checks leave the denominator.</p>
+  <p><b>Claim score</b> = Σ<sub>area</sub> weight × (checks passed ÷ checks applicable in that area), from 0 to 100. Headline metrics stay binary so McNemar applies: <b>source-backed accuracy</b> = A1 (right label) AND B4 (a citation passes every check), with abstentions counting as backed when the fact-checker also found the evidence insufficient.</p>
+  <div class="grid"><div class="card wide" id="rb-areas"></div></div>
+  <h2>All 50 checks</h2>
+  <div class="card"><div class="tablewrap" style="max-height:none"><table class="data" id="rb-items"></table></div></div>
+  <h2>Trap taxonomy</h2>
+  <p>Each test claim is tagged with the traps that make it hard (rule-based, from the claim text and the fact-checker's metadata; <code>06_traps.py</code>). Check C4 asks whether the answer noticed its claim's trap. Several checks apply only when a trap is present.</p>
+  <div class="card"><table class="data" id="rb-traps"></table></div>
+  <h2>Failure modes</h2>
+  <p>Each answer also gets exactly one failure-mode name, most severe first:</p>
+  <div class="card"><table class="data" id="rb-failures"></table></div>
+  <h2>Judge controls</h2>
+  <ul class="prose">
+    <li><b>Blind:</b> no model or system name in the judge prompt; answers from every system go through the same prompt.</li>
+    <li><b>Reference-anchored:</b> the judge sees the fact-checker's label, justification and research, so it scores against what the evidence showed, not its own beliefs.</li>
+    <li><b>Strict:</b> "passes only if a careful editor would agree without caveats"; ambiguous → 0.</li>
+    <li><b>Self-preference risk:</b> the judge is a frontier model that is also under test. The headline metric (source-backed accuracy) is decided by deterministic checks plus one narrow judge question, so it is largely immune; rubric-score comparisons involving the judge's own model family should be read with that in mind. Swap <code>JUDGE_MODEL</code> to rerun with a different judge.</li>
+  </ul>
+</section>
+
+<!-- ============================ IMPROVEMENTS ============================ -->
+<section class="tab" id="tab-improvements" data-title="Improvements">
+  <h2 style="margin-top:6px">The improvement ideas</h2>
+  <p>Each idea started as a guess about why the baseline fails. <span class="status built">built</span> = in the code and run by <code>run_all.py</code>; <span class="status data">data</span> = built and run with no model needed; <span class="status untested">untested</span> = written, needs a key; <span class="status planned">planned</span> = not built yet; <span class="status rejected">rejected</span> = considered and dropped, with the reason.</p>
+  <div class="card"><div class="tablewrap" style="max-height:none"><table class="data" id="im-ideas"></table></div></div>
+
+  <h2>Harness architecture</h2>
+  <p>All harnesses share claim extraction (one call per clip, temperature 0, cached), so differences between systems come from verification alone.</p>
+  <div class="card" id="im-arch"></div>
+
+  <h2>Post-training recipe</h2>
+  <div class="grid">
+    <div class="card" id="im-sft-steps"></div>
+    <div class="card" id="im-sft-chart"></div>
+  </div>
+  <h4>One training example (the target the model learns to produce)</h4>
+  <div class="card"><pre id="im-example" style="white-space:pre-wrap;font-size:12px;margin:0;max-height:360px;overflow:auto"></pre></div>
+  <h4>Hyperparameters</h4>
+  <table class="data" style="max-width:720px">
+    <tbody>
+      <tr><td>Base model</td><td><span data-k="base_name"></span> on Fireworks (<code>08_sft_train.py</code>)</td></tr>
+      <tr><td>Method</td><td>LoRA SFT, rank 16, learning rate 1e-4, 1 epoch (Forge sample defaults); try 2 epochs if validation loss is still falling</td></tr>
+      <tr><td>Loss</td><td>Cross-entropy on the assistant turn only (the JSON verdict)</td></tr>
+      <tr><td>Context</td><td>8,192 tokens (median prompt <span data-k="sft_chars"></span> characters)</td></tr>
+      <tr><td>Evaluation</td><td>Validation loss on <span data-k="sft_val"></span> held-out examples during training; then the locked 65-claim test set through harness C, compared with the base model on the same harness (isolates post-training) and with frontier models</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================ DEMO ============================ -->
+<section class="tab" id="tab-demo" data-title="Demo">
+  <h2 style="margin-top:6px"><span data-k="n_demos"></span> ways to show the result</h2>
+  <p>Each one is a live chart in this report; click to jump to it.</p>
+  <div class="card"><table class="data" id="dm-list"></table></div>
+  <h2>The 120-second video</h2>
+  <table class="data" style="max-width:960px" id="dm-script"></table>
+</section>
+</div>
+<div id="tip" role="tooltip"></div>
+</div>
+
+<script id="data" type="application/json">/*__DATA__*/{}</script>
+<script>
+"use strict";
+const D = JSON.parse(document.getElementById("data").textContent);
+const M = D.meta, RUNS = D.runs, CL = D.claims, RUB = D.rubric;
+const NS = "http://www.w3.org/2000/svg", REPS = 5000;
+const MODEL = Object.fromEntries(D.models.map(m => [m.key, m]));
+const RUN = Object.fromEntries(RUNS.map(r => [r.run, r]));
+const runOf = (m, s) => RUNS.find(r => r.model === m && r.system === s);
+const LABELS = ["supported", "unverified", "contradicted"];
+const LABEL_COLOR = { supported: "var(--lab-supported)", unverified: "var(--lab-unverified)", contradicted: "var(--lab-contradicted)" };
+const TIER_COLOR = { open: "var(--sys-base)", frontier: "var(--series-2)", improved: "var(--series-1)" };
+const state = { slice: "all", type: "all", trap: "all", metric: "sb" };
+const METRICS = {
+  sb: { name: "source-backed accuracy", key: "sb_correct", binary: true },
+  label: { name: "label accuracy", key: "correct", binary: true },
+  rubric: { name: "rubric score", key: "score", binary: false },
+};
+
+// ---------- helpers ----------
+function h(tag, attrs = {}, parent, text) { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) if (v != null) e.setAttribute(k, v); if (text != null) e.textContent = text; if (parent) parent.appendChild(e); return e; }
+function s(tag, attrs = {}, parent, text) { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) if (v != null) e.setAttribute(k, v); if (text != null) e.textContent = text; if (parent) parent.appendChild(e); return e; }
+const pct = (x, d = 1) => x == null || isNaN(x) ? "–" : (100 * x).toFixed(d) + "%";
+const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
+const fmtP = p => p == null ? "–" : p >= 0.001 ? p.toFixed(3).replace(/0+$/, "").replace(/\.$/, "") : p.toExponential(1);
+const metric = () => METRICS[state.metric];
+const fmtV = x => metric().binary ? pct(x) : (100 * x).toFixed(1);
+const fmtGap = x => (x >= 0 ? "+" : "−") + Math.abs(100 * x).toFixed(1) + (metric().binary ? " pp" : " pts");
+const cap = t => t[0].toUpperCase() + t.slice(1);
+function barPath(x0, y, w, hgt, r = 4) {
+  if (!w) return "";
+  const aw = Math.abs(w), rr = Math.min(r, aw, hgt / 2), x1 = x0 + w;
+  return w > 0
+    ? `M${x0},${y}H${x1 - rr}Q${x1},${y} ${x1},${y + rr}V${y + hgt - rr}Q${x1},${y + hgt} ${x1 - rr},${y + hgt}H${x0}Z`
+    : `M${x0},${y}H${x1 + rr}Q${x1},${y} ${x1},${y + rr}V${y + hgt - rr}Q${x1},${y + hgt} ${x1 + rr},${y + hgt}H${x0}Z`;
+}
+function barPathV(x, y0, w, hgt, r = 3) { if (hgt <= 0) return ""; const rr = Math.min(r, w / 2, hgt), y1 = y0 - hgt; return `M${x},${y0}V${y1 + rr}Q${x},${y1} ${x + rr},${y1}H${x + w - rr}Q${x + w},${y1} ${x + w},${y1 + rr}V${y0}Z`; }
+const isDark = () => document.documentElement.dataset.theme === "dark" || (document.documentElement.dataset.theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+const width = (el, fb = 560) => Math.max(320, Math.round(el.clientWidth) || fb);
+
+const tip = document.getElementById("tip");
+function showTip(evt, title, rows) {
+  tip.replaceChildren(); h("div", { class: "t" }, tip, title);
+  for (const r of rows) { const d = h("div", { class: "r" }, tip); if (r.color) h("i", { style: `background:${r.color}` }, d); h("b", {}, d, r.value); if (r.label) h("span", {}, d, r.label); }
+  tip.style.display = "block";
+  let x, y; if (evt.type === "focus") { const b = evt.target.getBoundingClientRect(); x = b.right; y = b.top; } else { x = evt.clientX; y = evt.clientY; }
+  tip.style.left = Math.min(x + 14, innerWidth - tip.offsetWidth - 8) + "px";
+  tip.style.top = Math.max(8, Math.min(y + 14, innerHeight - tip.offsetHeight - 8)) + "px";
+}
+const hideTip = () => { tip.style.display = "none"; };
+function hover(el, fn) {
+  el.classList.add("mark"); el.setAttribute("tabindex", "0");
+  el.addEventListener("pointermove", e => { const [t, r] = fn(); showTip(e, t, r); });
+  el.addEventListener("focus", e => { const [t, r] = fn(); showTip(e, t, r); });
+  el.addEventListener("pointerleave", hideTip); el.addEventListener("blur", hideTip);
+  return el;
+}
+function card(id, title, desc, render) {
+  const root = document.getElementById(id); if (!root) return;
+  root.replaceChildren();
+  const head = h("div", { class: "card-head" }, root), t = h("div", {}, head);
+  h("h3", {}, t, title); if (desc) h("div", { class: "desc" }, t, desc);
+  const btn = h("button", { class: "toggle", type: "button", "aria-pressed": "false" }, head, "Table");
+  const body = h("div", {}, root);
+  let out = {};
+  try { out = render(body) || {}; } catch (e) { h("div", { class: "desc no" }, body, "Could not draw: " + e.message); console.error(e); }
+  if (!out.table) { btn.remove(); return; }
+  const wrap = h("div", { class: "tablewrap", hidden: "" }, root), T = h("table", { class: "data" }, wrap);
+  const tr = h("tr", {}, h("thead", {}, T)); out.table.cols.forEach(c => h("th", {}, tr, c));
+  const tb = h("tbody", {}, T); out.table.rows.forEach(r => { const row = h("tr", {}, tb); r.forEach(c => h("td", {}, row, c)); });
+  btn.addEventListener("click", () => { const on = wrap.hidden; wrap.hidden = !on; body.hidden = on; btn.setAttribute("aria-pressed", String(on)); btn.textContent = on ? "Chart" : "Table"; });
+}
+function legend(parent, items, dot = false) { const l = h("div", { class: "legend" }, parent); items.forEach(([n, c]) => { const sp = h("span", {}, l); h("i", { class: dot ? "dot" : "", style: `background:${c}` }, sp); sp.appendChild(document.createTextNode(n)); }); }
+function chip(parent, label) { const c = h("span", { class: "chip" }, parent); h("span", { class: "sw", style: `background:${LABEL_COLOR[label]}` }, c); c.appendChild(document.createTextNode(label)); return c; }
+
+// ---------- roles: pre-registered, so the "improved" system is not picked by its test score ----------
+const ROLE = {};
+ROLE.openBase = runOf(M.base_open, "closed_book");
+ROLE.improved = runOf(M.improved_model, M.final_system) || runOf(M.base_open, M.final_system);
+ROLE.baseFinal = runOf(M.base_open, M.final_system);
+{ // the strongest frontier baseline on the primary metric over all claims (the hardest bar to beat)
+  const fb = RUNS.filter(r => r.tier === "frontier" && r.system === "closed_book");
+  const sbAll = r => mean(CL.map(c => D.rows[r.run][c.id].sb_correct));
+  ROLE.frontierBest = fb.sort((a, b) => sbAll(b) - sbAll(a))[0];
+  ROLE.frontierHarness = ROLE.frontierBest && runOf(ROLE.frontierBest.model, M.final_system);
+}
+const HEAD = [["Open, off the shelf", ROLE.openBase, "var(--sys-base)"], ["Frontier, off the shelf", ROLE.frontierBest, "var(--series-2)"],
+  ["Improved open", ROLE.improved, "var(--series-1)"], ["Frontier + same harness", ROLE.frontierHarness, "var(--series-3)"]].filter(x => x[1]);
+const runLabel = r => `${r.name} · ${r.sys_name}`;
+const shortRun = r => `${r.model === M.improved_model ? "GLM+FT" : r.name.split(" ")[0]} ${r.system === "closed_book" ? "off-shelf" : r.sys_name.split(":")[0]}`;
+const pairLabel = f => `${shortRun(f.a)} vs ${shortRun(f.b)}`;
+const tierOf = r => r.tier === "frontier" ? "frontier" : (r.system === "closed_book" && r.tier === "open") ? "open" : "improved";
+
+// ---------- data slicing and stats ----------
+let biggest; { const n = {}; CL.forEach(c => n[c.video] = (n[c.video] || 0) + 1); biggest = Object.entries(n).sort((a, b) => b[1] - a[1])[0]; }
+const slice = () => CL.filter(c => (state.slice === "all" || c.video !== biggest[0]) && (state.type === "all" || c.claim_types.includes(state.type)) && (state.trap === "all" || c.traps.includes(state.trap)));
+const row = (run, c) => D.rows[run.run || run][c.id];
+const val = (run, c) => { const r = row(run, c), k = metric().key; return k === "score" ? r.score / 100 : r[k]; };
+const avg = (cs, run) => mean(cs.map(c => val(run, c)));
+const accOf = (cs, run, key) => mean(cs.map(c => row(run, c)[key]));
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function mcnemar(cs, a, b) {
+  let x = 0, y = 0; cs.forEach(c => { const p = val(a, c), q = val(b, c); if (p && !q) x++; if (!p && q) y++; });
+  const n = x + y, k = Math.min(x, y); if (!n || x === y) return { a: x, b: y, p: 1 };
+  let logC = 0, tail = 0; for (let i = 0; i <= k; i++) { if (i) logC += Math.log((n - i + 1) / i); tail += Math.exp(logC - n * Math.LN2); }
+  return { a: x, b: y, p: Math.min(1, 2 * tail) };
+}
+function permutation(cs, a, b, reps = 10000) { // paired sign-flip test on per-claim differences
+  const d = cs.map(c => val(a, c) - val(b, c)), obs = Math.abs(mean(d)), r = rng(11); let hit = 0;
+  for (let i = 0; i < reps; i++) { let s2 = 0; for (const x of d) s2 += r() < .5 ? x : -x; if (Math.abs(s2 / d.length) >= obs - 1e-12) hit++; }
+  return { p: (hit + 1) / (reps + 1), a: d.filter(x => x > 0).length, b: d.filter(x => x < 0).length };
+}
+function bootGap(cs, a, b) {
+  const by = {}; cs.forEach(c => (by[c.video] = by[c.video] || []).push(c));
+  const vids = Object.keys(by), r = rng(7), per = vids.map(v => { let x = 0, y = 0; by[v].forEach(c => { x += val(a, c); y += val(b, c); }); return [x, y, by[v].length]; });
+  const gaps = new Float64Array(REPS);
+  for (let i = 0; i < REPS; i++) { let x = 0, y = 0, n = 0; for (let j = 0; j < vids.length; j++) { const p = per[(r() * vids.length) | 0]; x += p[0]; y += p[1]; n += p[2]; } gaps[i] = n ? (x - y) / n : 0; }
+  const so = Array.from(gaps).sort((p, q) => p - q), q = f => so[Math.round(f * (REPS - 1))];
+  return { point: avg(cs, a) - avg(cs, b), lo: q(.025), hi: q(.975), gaps: so };
+}
+function bootMean(cs, a, reps = 1500) {
+  const by = {}; cs.forEach(c => (by[c.video] = by[c.video] || []).push(c));
+  const vids = Object.keys(by), r = rng(3), per = vids.map(v => [by[v].reduce((s2, c) => s2 + val(a, c), 0), by[v].length]), out = [];
+  for (let i = 0; i < reps; i++) { let x = 0, n = 0; for (let j = 0; j < vids.length; j++) { const p = per[(r() * vids.length) | 0]; x += p[0]; n += p[1]; } out.push(n ? x / n : 0); }
+  out.sort((p, q) => p - q); return [out[Math.round(.025 * (reps - 1))], out[Math.round(.975 * (reps - 1))]];
+}
+function family() {
+  const F = [], add = (a, b, group) => { if (a && b && a.run !== b.run && !F.some(f => f.a === a && f.b === b)) F.push({ a, b, group }); };
+  add(ROLE.improved, ROLE.openBase, "Before → after (required)");
+  RUNS.filter(r => r.tier === "frontier" && r.system === "closed_book").forEach(r => add(ROLE.improved, r, "Improved open vs frontier, off the shelf"));
+  RUNS.filter(r => r.tier === "frontier" && r.system === M.final_system).forEach(r => add(ROLE.improved, r, "Improved open vs frontier + same harness"));
+  RUNS.filter(r => r.model === M.base_open && r.system !== "closed_book").forEach(r => add(r, ROLE.openBase, "Harness ablation on the base model"));
+  if (ROLE.improved !== ROLE.baseFinal) add(ROLE.improved, ROLE.baseFinal, "Fine-tune alone (same harness)");
+  return F;
+}
+function testFamily(cs) {
+  const F = family().map(f => {
+    const t = metric().binary ? mcnemar(cs, f.a, f.b) : permutation(cs, f.a, f.b);
+    return { ...f, p: t.p, nA: t.a, nB: t.b, boot: bootGap(cs, f.a, f.b), test: metric().binary ? "McNemar" : "permutation" };
+  });
+  const order = F.map((f, i) => [f.p, i]).sort((x, y) => x[0] - y[0]); let run = 0;  // Holm step-down
+  order.forEach(([p, i], k) => { run = Math.max(run, Math.min(1, (F.length - k) * p)); F[i].holm = run; });
+  F.forEach(f => { const sig = f.holm < .05 && (f.boot.lo > 0 || f.boot.hi < 0); f.verdict = !sig ? { cls: "nss", icon: "⬜️", text: "Not significant" } : f.boot.point > 0 ? { cls: "good", icon: "🟢", text: "Real gain" } : { cls: "bad", icon: "▼", text: "Real loss" }; });
+  return F;
+}
+function mde(n, pd, za = 1.96, zb = 0.8416) { // smallest accuracy gap McNemar detects at 80% power
+  for (let d = 0.005; d < pd; d += 0.0025) { const need = Math.pow(za * Math.sqrt(pd) + zb * Math.sqrt(Math.max(pd - d * d, 1e-9)), 2) / (d * d); if (need <= n) return d; }
+  return null;
+}
+
+// ---------- generic charts ----------
+function groupedHBar(body, { groups, series, value, fmt, max = 1, ticks, tickFmt = v => pct(v, 0), refs = [], note }) {
+  const W = width(body), L = Math.min(210, Math.round(W * .34)), R = 70, barH = 12, gap = 2, gpad = 16;
+  ticks = ticks || [0, .25, .5, .75, 1].map(t => t * max);
+  const gh = series.length * (barH + gap) - gap, H = 8 + groups.length * (gh + gpad) + 22;
+  const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body), x = v => L + (W - L - R) * v / max;
+  ticks.forEach(t => { s("line", { x1: x(t), x2: x(t), y1: 4, y2: H - 20, stroke: "var(--grid)" }, svg); s("text", { x: x(t), y: H - 6, class: "tick", "text-anchor": "middle" }, svg, tickFmt(t)); });
+  groups.forEach((g, gi) => {
+    const y0 = 8 + gi * (gh + gpad);
+    s("text", { x: L - 10, y: y0 + gh / 2 + (g.sub ? -2 : 4), class: "lbl", "text-anchor": "end" }, svg, g.label);
+    if (g.sub) s("text", { x: L - 10, y: y0 + gh / 2 + 12, class: "tick", "text-anchor": "end" }, svg, g.sub);
+    refs.filter(r => r.group === g.key).forEach(r => { s("line", { x1: x(r.value), x2: x(r.value), y1: y0 - 3, y2: y0 + gh + 3, stroke: "var(--text-secondary)", "stroke-width": 1.5 }, svg); });
+    series.forEach((sr, si) => {
+      const v = value(g, sr), y = y0 + si * (barH + gap); if (v == null || isNaN(v)) return;
+      const grp = s("g", {}, svg);
+      s("rect", { x: L, y: y - 1, width: W - L, height: barH + 2, class: "hit" }, grp);
+      s("path", { d: barPath(x(0), y, Math.max(x(v) - x(0), v > 0 ? 1.5 : 0), barH), fill: sr.color }, grp);
+      s("text", { x: x(v) + 5, y: y + barH - 2, class: "val" }, grp, fmt(v, g, sr));
+      hover(grp, () => [g.label + (g.sub ? ` (${g.sub})` : ""), [{ value: fmt(v, g, sr), label: sr.name, color: sr.color }]]);
+    });
+  });
+  s("line", { x1: x(0), x2: x(0), y1: 4, y2: H - 20, stroke: "var(--axis)" }, svg);
+  if (note) h("div", { class: "desc" }, body, note);
+}
+const headSeries = () => HEAD.map(([n, r, c]) => ({ key: r.run, name: `${n}: ${runLabel(r)}`, short: n, color: c, run: r }));
+const headLegend = body => legend(body, HEAD.map(([n, r, c]) => [`${n} (${r.name}${r.system !== "closed_book" ? ", " + r.sys_name : ""})`, c]));
+
+// ---------- SUBMISSION TAB ----------
+function renderSubmission() {
+  const cs = CL, F = testFamily(cs), main = F[0];
+  const best = ROLE.frontierBest, vsFrontier = F.find(f => f.a === ROLE.improved && f.b === best);
+  const t = document.getElementById("tldr"); t.replaceChildren();
+  const add = (txt, bold) => bold ? h("b", {}, t, txt) : t.appendChild(document.createTextNode(txt));
+  add("TL;DR. ", true);
+  add(`On ${cs.length} fact-checker-labeled claims from ${new Set(cs.map(c => c.video)).size} short-video clips, the off-the-shelf ${ROLE.openBase.name} scores ${fmtV(avg(cs, ROLE.openBase))} ${metric().name}. `);
+  if (ROLE.improved) add(`The improved open system (${runLabel(ROLE.improved)}) scores ${fmtV(avg(cs, ROLE.improved))} (${fmtGap(main.boot.point)}, 95% CI [${fmtGap(main.boot.lo)}, ${fmtGap(main.boot.hi)}], Holm-adjusted p = ${fmtP(main.holm)}: ${main.verdict.text.toLowerCase()}). `);
+  if (best && vsFrontier) add(`The strongest frontier model off the shelf, ${best.name}, scores ${fmtV(avg(cs, best))}; the improved open system is ${fmtGap(vsFrontier.boot.point)} against it (Holm p = ${fmtP(vsFrontier.holm)}: ${vsFrontier.verdict.text.toLowerCase()}).`);
+  // kpis
+  const k = document.getElementById("sub-kpis"); k.replaceChildren();
+  HEAD.forEach(([n, r, c], i) => {
+    const tl = h("div", { class: "card tile" + (i === 2 ? " hero" : "") }, k);
+    const l = h("div", { class: "label" }, tl); h("i", { style: `width:10px;height:10px;border-radius:3px;background:${c};display:inline-block` }, l); l.appendChild(document.createTextNode(n));
+    h("div", { class: "value" }, tl, fmtV(avg(cs, r))); h("div", { class: "delta" }, tl, runLabel(r));
+    const f = F.find(f => f.a === ROLE.improved && f.b === r); if (f) h("span", { class: `verdict ${f.verdict.cls}`, style: "margin-top:6px" }, tl, `${f.verdict.icon} improved open is ${fmtGap(f.boot.point)} vs this`);
+  });
+  if (k.children.length >= 3) k.insertBefore(k.children[2], k.children[0]);
+  // fill spans
+  const sft = D.sft || {}, impr = ROLE.improved ? accOf(cs, ROLE.improved, "sb_correct") : 0;
+  const fill = { impr_metric: `(${pct(impr, 0)})`, hours_saved: Math.round(30 * 230 * impr * 15 / 60).toLocaleString(), n_ideas: D.ideas.length,
+    base_name: MODEL[M.base_open].name, sft_train: (sft.train || 0).toLocaleString(), sft_val: (sft.val || 0).toLocaleString(), sft_chars: (sft.prompt_chars_median || 0).toLocaleString(),
+    n_family: F.length, judge: M.judge };
+  document.querySelectorAll("[data-k]").forEach(e => { if (fill[e.dataset.k] != null) e.textContent = fill[e.dataset.k]; });
+  renderFunnel(); renderTrapCounts(); renderModels(cs); renderFlow(); renderTiers("s-tiers", cs); renderSig("s-sig", cs, F);
+  const pd = main ? (main.nA + main.nB) / cs.length : .3, md = mde(cs.length, Math.max(pd, .05));
+  const pn = document.getElementById("power-note"); pn.replaceChildren();
+  h("b", {}, pn, "What 65 claims can and can't show. ");
+  pn.appendChild(document.createTextNode(`With ${cs.length} claims and ${pct(pd, 0)} of claims answered differently by the two headline systems, McNemar has 80% power only for gains of ${md ? fmtGap(md) : "more than the discordance rate"} or more. Smaller real gains will come out not significant. The paired rubric score uses every claim's 0–100 score instead of right/wrong, so it detects smaller gains. Adding the 26 TikTok/Facebook/Instagram claims (needs speech-to-text) or a second dataset would raise power; the power curve on the Results tab shows how many claims each gain needs.`));
+  renderJudging(F);
+}
+function renderFunnel() {
+  card("s-funnel", "Test-set funnel", "Every AVeriTeC claim whose original post is a video, and why each was dropped. Real data.", body => {
+    const T = D.testset, steps = [["Video-sourced claims", T.video_claims]];
+    let left = T.video_claims;
+    Object.entries(T.dropped).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => { left -= v; steps.push([`− ${k}`, left, v]); });
+    steps.push(["Kept in the test set", left]);
+    const W = width(body), L = Math.min(260, W * .45), R = 50, rh = 22, H = steps.length * rh + 8, x = v => L + (W - L - R) * v / T.video_claims;
+    const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+    steps.forEach(([n, v, d], i) => {
+      const y = 4 + i * rh, g = s("g", {}, svg);
+      s("text", { x: L - 8, y: y + 13, class: i === 0 || i === steps.length - 1 ? "lbl-strong" : "lbl", "text-anchor": "end" }, g, n.length > 40 ? n.slice(0, 39) + "…" : n);
+      s("path", { d: barPath(L, y + 3, x(v) - L, 14), fill: i === steps.length - 1 ? "var(--series-1)" : "var(--seq-2)" }, g);
+      s("text", { x: x(v) + 5, y: y + 14, class: "val" }, g, v);
+      hover(g, () => [n, [{ value: String(v), label: "claims left" }, ...(d ? [{ value: String(d), label: "dropped here" }] : [])]]);
+    });
+    return { table: { cols: ["Step", "Claims left", "Dropped"], rows: steps.map(([n, v, d]) => [n, v, d || ""]) } };
+  });
+}
+function renderTrapCounts() {
+  card("s-traps", "What makes these claims hard", "Trap tags per claim (rule-based, from the claim and the fact-checker's metadata). A claim can have several. Real data.", body => {
+    const T = RUB.traps, counts = Object.keys(T).map(k => [k, CL.filter(c => c.traps.includes(k)).length]).sort((a, b) => b[1] - a[1]);
+    groupedHBar(body, { groups: counts.map(([k, n]) => ({ key: k, label: T[k].name, n })), series: [{ name: "claims", color: "var(--series-1)" }], value: g => g.n / CL.length, fmt: (v, g) => `${g.n} (${pct(v, 0)})` });
+    return { table: { cols: ["Trap", "Claims", "How it's detected"], rows: counts.map(([k, n]) => [T[k].name, n, T[k].detect]) } };
+  });
+}
+function renderModels(cs) {
+  card("s-models", "The models", "Open models on Fireworks, frontier models via OpenRouter. Every model runs the off-the-shelf baseline and the final harness; the base open model runs the full ablation.", body => {
+    const T = h("table", { class: "data" }, body), hr = h("tr", {}, h("thead", {}, T));
+    ["Model", "Tier", "Why", "Off the shelf", `+ ${D.systems[M.final_system].name}`, "Runs"].forEach(c => h("th", {}, hr, c));
+    const tb = h("tbody", {}, T);
+    D.models.forEach(m => {
+      const tr = h("tr", {}, tb), b = runOf(m.key, "closed_book"), f = runOf(m.key, M.final_system);
+      h("td", {}, tr, m.name); h("td", {}, tr, m.tier); h("td", { class: "muted" }, tr, m.why);
+      h("td", {}, tr, b ? fmtV(avg(cs, b)) : "–"); h("td", {}, tr, f ? fmtV(avg(cs, f)) : "–");
+      h("td", {}, tr, RUNS.filter(r => r.model === m.key).length);
+    });
+  });
+}
+function renderFlow() {
+  const f = document.getElementById("s-flow"); f.replaceChildren();
+  [["Transcript clip", "~90 s window, video date"], ["Extract claims", "self-contained, numbers kept"], ["Verification questions", "who / what / when / how many"], ["Search", "fact-check sites blocked"], ["Label from evidence", "quote the backing sentence"], ["Quote check", "verbatim or repair once"], ["Fine-tuned labeler", "LoRA on fact-checkers' research"]]
+    .forEach(([t, d], i, a) => { const st = h("div", { class: "step" }, f); h("b", {}, st, t); st.appendChild(document.createTextNode(d)); if (i < a.length - 1) h("span", { class: "arrow" }, f, "→"); });
+}
+function renderJudging(F) {
+  const T = document.getElementById("judging"); T.replaceChildren();
+  const hr = h("tr", {}, h("thead", {}, T)); ["Criterion", "Weight", "What this project shows", "Where it would lose points"].forEach(c => h("th", {}, hr, c));
+  const tb = h("tbody", {}, T);
+  [["Benchmark evaluation", "40%", `Same locked ${CL.length} claims for every system; ${D.models.filter(m => m.tier === "open").length} open + ${D.models.filter(m => m.tier === "frontier").length} frontier models; ${F.length} pre-registered comparisons with McNemar/permutation, video-level bootstrap and Holm correction; losses reported`, "65 claims limits power; one video holds 20 claims (sensitivity filter provided); Wikipedia retrieval is current, not date-capped"],
+   ["Business value", "25%", "Named users (fact-checkers, trust and safety); value math with assumptions written out; the output is a source-backed verdict an analyst can check", "No interview with a fact-checker; time-saved figures are assumptions"],
+   ["Technical execution", "20%", `${D.ideas.filter(i => i.status === "built").length} harnesses built; leakage-safe fine-tuning data (${(D.sft || {}).train || 0} examples); citations verified by fetching, verbatim matching and a judge; 50-item rubric; everything cached`, "Fine-tune not yet trained end to end here; only captioned YouTube clips (no speech-to-text)"],
+   ["Presentation & demo", "10%", `${D.demos.length} live charts; before/after example; 120 s video script`, "Video still to record"],
+   ["Documentation", "5%", "README with run order, model registry, mock mode, this report", "Model IDs and prices need checking before the real run"]]
+    .forEach(r => { const tr = h("tr", {}, tb); r.forEach(c => h("td", {}, tr, c)); });
+}
+
+// ---------- RESULTS TAB ----------
+function renderHero(cs, F) {
+  const k = document.getElementById("r-hero"); k.replaceChildren();
+  const main = F.find(f => f.a === ROLE.improved && f.b === ROLE.frontierBest) || F[0];
+  const hero = h("div", { class: "card tile hero" }, k);
+  h("div", { class: "label" }, hero, `Improved open vs best frontier, ${metric().name}`);
+  h("div", { class: "value" }, hero, main ? fmtGap(main.boot.point) : "–");
+  if (main) { h("div", { class: "delta" }, hero, `${runLabel(main.a)} ${fmtV(avg(cs, main.a))} vs ${runLabel(main.b)} ${fmtV(avg(cs, main.b))} · 95% CI [${fmtGap(main.boot.lo)}, ${fmtGap(main.boot.hi)}] · Holm p = ${fmtP(main.holm)}`); h("span", { class: `verdict ${main.verdict.cls}`, style: "margin-top:6px" }, hero, `${main.verdict.icon} ${main.verdict.text}`); }
+  HEAD.filter(x => x[1] !== ROLE.improved).forEach(([n, r, c]) => {
+    const tl = h("div", { class: "card tile" }, k), l = h("div", { class: "label" }, tl);
+    h("i", { style: `width:10px;height:10px;border-radius:3px;background:${c};display:inline-block` }, l); l.appendChild(document.createTextNode(n));
+    h("div", { class: "value" }, tl, fmtV(avg(cs, r))); h("div", { class: "delta" }, tl, runLabel(r));
+  });
+}
+function renderTiers(id, cs) {
+  card(id, "Every model before and after the harness", `${cap(metric().name)} off the shelf (hollow) and with ${D.systems[M.final_system].name} (filled); the fine-tune is drawn from its base. Grouped by tier.`, body => {
+    const models = D.models.filter(m => runOf(m.key, "closed_book") || runOf(m.key, M.final_system));
+    legend(body, [["Open", TIER_COLOR.open], ["Improved (open + harness / fine-tune)", TIER_COLOR.improved], ["Frontier", TIER_COLOR.frontier]], true);
+    const W = width(body, 1100), L = 210, R = 90, rh = 30, H = models.length * rh + 30, x = v => L + (W - L - R) * v;
+    const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+    [0, .25, .5, .75, 1].forEach(t => { s("line", { x1: x(t), x2: x(t), y1: 0, y2: H - 22, stroke: "var(--grid)" }, svg); s("text", { x: x(t), y: H - 6, class: "tick", "text-anchor": "middle" }, svg, metric().binary ? pct(t, 0) : String(100 * t)); });
+    const tbl = [];
+    models.forEach((m, i) => {
+      const y = 10 + i * rh, b = runOf(m.key, "closed_book"), f = runOf(m.key, M.final_system);
+      const from = b || (m.key === M.improved_model ? ROLE.openBase : null);
+      const col = m.tier === "frontier" ? TIER_COLOR.frontier : TIER_COLOR.improved;
+      s("text", { x: L - 10, y: y + 4, class: m.tier === "improved" ? "lbl-strong" : "lbl", "text-anchor": "end" }, svg, m.name);
+      const g = s("g", {}, svg);
+      s("rect", { x: L, y: y - 12, width: W - L, height: 24, class: "hit" }, g);
+      const vb = from ? avg(cs, from) : null, vf = f ? avg(cs, f) : null;
+      if (vb != null && vf != null) s("line", { x1: x(vb), x2: x(vf), y1: y, y2: y, stroke: col, "stroke-width": 2, "stroke-opacity": .6 }, g);
+      if (vb != null) s("circle", { cx: x(vb), cy: y, r: 5, fill: "var(--surface-1)", stroke: m.tier === "frontier" ? TIER_COLOR.frontier : TIER_COLOR.open, "stroke-width": 2 }, g);
+      if (vf != null) { s("circle", { cx: x(vf), cy: y, r: 6, fill: col, stroke: "var(--surface-1)", "stroke-width": 2 }, g); s("text", { x: x(Math.max(vf, vb || 0)) + 10, y: y + 4, class: "val" }, g, fmtV(vf) + (vb != null ? ` (${fmtGap(vf - vb)})` : "")); }
+      hover(g, () => [m.name, [...(vb != null ? [{ value: fmtV(vb), label: from === b ? "off the shelf" : `base model off the shelf (${from.name})`, color: TIER_COLOR.open }] : []), ...(vf != null ? [{ value: fmtV(vf), label: `with ${D.systems[M.final_system].name}`, color: col }] : [])]]);
+      tbl.push([m.name, m.tier, vb != null ? fmtV(vb) : "–", vf != null ? fmtV(vf) : "–", vb != null && vf != null ? fmtGap(vf - vb) : "–"]);
+    });
+    return { table: { cols: ["Model", "Tier", "Off the shelf", "With harness", "Change"], rows: tbl } };
+  });
+}
+function renderBoard(cs) {
+  card("r-board", "Leaderboard: every run, with its 95% interval", `${cap(metric().name)} with a video-level bootstrap interval. Overlapping intervals are not a significance test; the table below is.`, body => {
+    legend(body, [["Open, off the shelf", TIER_COLOR.open], ["Open + harness / fine-tune", TIER_COLOR.improved], ["Frontier", TIER_COLOR.frontier]], true);
+    const runs = RUNS.map(r => ({ r, v: avg(cs, r), ci: bootMean(cs, r) })).sort((a, b) => b.v - a.v);
+    const W = width(body, 1100), L = 290, R = 80, rh = 22, H = runs.length * rh + 30, x = v => L + (W - L - R) * v;
+    const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+    [0, .25, .5, .75, 1].forEach(t => { s("line", { x1: x(t), x2: x(t), y1: 0, y2: H - 22, stroke: "var(--grid)" }, svg); s("text", { x: x(t), y: H - 6, class: "tick", "text-anchor": "middle" }, svg, metric().binary ? pct(t, 0) : String(100 * t)); });
+    runs.forEach(({ r, v, ci }, i) => {
+      const y = 10 + i * rh, col = TIER_COLOR[tierOf(r)], g = s("g", {}, svg);
+      s("text", { x: L - 10, y: y + 4, class: r === ROLE.improved ? "lbl-strong" : "lbl", "text-anchor": "end" }, svg, runLabel(r));
+      s("rect", { x: L, y: y - 10, width: W - L, height: 20, class: "hit" }, g);
+      s("line", { x1: x(ci[0]), x2: x(ci[1]), y1: y, y2: y, stroke: col, "stroke-width": 2, "stroke-linecap": "round" }, g);
+      s("circle", { cx: x(v), cy: y, r: 5, fill: col, stroke: "var(--surface-1)", "stroke-width": 2 }, g);
+      s("text", { x: x(ci[1]) + 8, y: y + 4, class: "val" }, g, fmtV(v));
+      hover(g, () => [runLabel(r), [{ value: fmtV(v), label: metric().name, color: col }, { value: `[${fmtV(ci[0])}, ${fmtV(ci[1])}]`, label: "95% interval" }]]);
+    });
+    return { table: { cols: ["Run", "Tier", cap(metric().name), "95% low", "95% high"], rows: runs.map(({ r, v, ci }) => [runLabel(r), tierOf(r), fmtV(v), fmtV(ci[0]), fmtV(ci[1])]) } };
+  });
+}
+function renderWinrate(cs, F) {
+  card("r-winrate", "Paired win rate on the same claims", "For each comparison, the share of claims where the first system's rubric score beats the second's by more than 2 points, ties within 2 points, and losses. Scored blind by the judge. Labels: model, harness letter (A-E) or off-shelf; GLM+FT = the fine-tune; hover for full names.", body => {
+    legend(body, [["wins", "var(--div-pos)"], ["ties", "var(--lab-unverified)"], ["losses", "var(--div-neg)"]]);
+    const W = width(body, 1100), L = 260, R = 20, rh = 26, H = F.length * rh + 26, x = v => L + (W - L - R) * v;
+    const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body), tbl = [];
+    F.forEach((f, i) => {
+      let w = 0, t = 0, l = 0; cs.forEach(c => { const d = row(f.a, c).score - row(f.b, c).score; if (d > 2) w++; else if (d < -2) l++; else t++; });
+      const y = 4 + i * rh, parts = [[w, "var(--div-pos)", "wins"], [t, "var(--lab-unverified)", "ties"], [l, "var(--div-neg)", "losses"]];
+      s("text", { x: L - 10, y: y + 13, class: "lbl", "text-anchor": "end" }, svg, pairLabel(f));
+      let x0 = 0;
+      parts.forEach(([n, col, name], j) => {
+        if (!n) return; const fr = n / cs.length, g = s("g", {}, svg), ww = Math.max(0, x(x0 + fr) - x(x0) - (x0 + fr < .999 ? 2 : 0));
+        s("rect", { x: x(x0), y, width: ww, height: 18, rx: 3, fill: col }, g);
+        if (ww > 34) s("text", { x: x(x0) + ww / 2, y: y + 13, "text-anchor": "middle", style: `font-size:11px;fill:${j === 1 ? "#0b0b0b" : "#fff"}` }, g, pct(fr, 0));
+        hover(g, () => [`${runLabel(f.a)} vs ${runLabel(f.b)}`, [{ value: `${n} of ${cs.length} claims`, label: name, color: col }]]);
+        x0 += fr;
+      });
+      tbl.push([runLabel(f.a), runLabel(f.b), w, t, l, pct(w / Math.max(1, w + l), 0)]);
+    });
+    s("text", { x: W - R, y: H - 4, class: "tick", "text-anchor": "end" }, svg, `n = ${cs.length} claims per row`);
+    return { table: { cols: ["System", "Reference", "Wins", "Ties", "Losses", "Win share (excl. ties)"], rows: tbl } };
+  });
+}
+function renderSig(id, cs, F) {
+  card(id, "Significance of every planned comparison", `${F[0] ? F[0].test : ""} test + video-level bootstrap on ${metric().name}, Holm-adjusted for ${F.length} comparisons. 🟢 = adjusted p < 0.05 and the interval excludes zero.`, body => {
+    const wrap = h("div", { class: "tablewrap", style: "max-height:none" }, body), T = h("table", { class: "data" }, wrap);
+    const hr = h("tr", {}, h("thead", {}, T)); ["Comparison", "System", "Reference", "Gap", "95% CI", metric().binary ? "Only system right / only ref right" : "Claims better / worse", "p", "Holm p", "Verdict"].forEach(c => h("th", {}, hr, c));
+    const tb = h("tbody", {}, T);
+    F.forEach(f => {
+      const tr = h("tr", {}, tb);
+      [f.group, runLabel(f.a), runLabel(f.b), fmtGap(f.boot.point), `[${fmtGap(f.boot.lo)}, ${fmtGap(f.boot.hi)}]`, `${f.nA} / ${f.nB}`, fmtP(f.p), fmtP(f.holm)].forEach(c => h("td", {}, tr, c));
+      const td = h("td", {}, tr); h("span", { class: `verdict ${f.verdict.cls}` }, td, `${f.verdict.icon} ${f.verdict.text}`);
+    });
+  });
+}
+function renderMcnemar(cs, F) {
+  card("r-mcnemar", "Who wins the disagreements?", metric().binary ? "Claims where exactly one system was right. Equal systems would split them like coin flips." : "Claims where the system's rubric score is higher vs lower than the reference's.", body => {
+    legend(body, [["reference better", "var(--sys-base)"], ["system better", "var(--series-1)"]]);
+    const W = width(body), L = 190, R = 74, rh = 26, H = F.length * rh + 24;
+    const mx = Math.max(4, ...F.map(f => Math.max(f.nA, f.nB))), cx = L + (W - L - R) / 2, sc = ((W - L - R) / 2 - 24) / mx;
+    const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+    F.forEach((f, i) => {
+      const y = 4 + i * rh;
+      s("text", { x: L - 8, y: y + 13, class: "lbl", "text-anchor": "end" }, svg, pairLabel(f));
+      const gb = s("g", {}, svg); s("rect", { x: L, y, width: cx - L, height: 20, class: "hit" }, gb);
+      s("path", { d: barPath(cx - 1, y + 3, -f.nB * sc, 14), fill: "var(--sys-base)" }, gb); s("text", { x: cx - f.nB * sc - 5, y: y + 14, class: "val", "text-anchor": "end" }, gb, f.nB);
+      hover(gb, () => [`${runLabel(f.a)} vs ${runLabel(f.b)}`, [{ value: String(f.nB), label: "reference better", color: "var(--sys-base)" }]]);
+      const ga = s("g", {}, svg); s("rect", { x: cx, y, width: W - R - cx, height: 20, class: "hit" }, ga);
+      s("path", { d: barPath(cx + 1, y + 3, f.nA * sc, 14), fill: "var(--series-1)" }, ga); s("text", { x: cx + f.nA * sc + 5, y: y + 14, class: "val" }, ga, f.nA);
+      hover(ga, () => [`${runLabel(f.a)} vs ${runLabel(f.b)}`, [{ value: String(f.nA), label: "system better", color: "var(--series-1)" }]]);
+      s("text", { x: W - R + 8, y: y + 14, class: "tick" }, svg, `p ${fmtP(f.holm)}`);
+    });
+    s("line", { x1: cx, x2: cx, y1: 0, y2: H - 18, stroke: "var(--axis)" }, svg);
+    s("text", { x: W - R + 8, y: H - 4, class: "tick" }, svg, "Holm p");
+    return { table: { cols: ["System", "Reference", "System better", "Reference better", "Holm p"], rows: F.map(f => [runLabel(f.a), runLabel(f.b), f.nA, f.nB, fmtP(f.holm)]) } };
+  });
+}
+function renderGaps(cs, F) {
+  card("r-gaps", "How big is each gap?", "Gap with its 95% video-level bootstrap interval. Crossing zero means the gap could be luck.", body => {
+    const W = width(body), L = 190, R = 16, rh = 26, H = F.length * rh + 30;
+    const lim = Math.max(.1, ...F.map(f => Math.max(Math.abs(f.boot.lo), Math.abs(f.boot.hi)))) * 1.1, x = v => L + (W - L - R) * (v + lim) / (2 * lim);
+    const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body), step = lim > .3 ? .2 : .1;
+    for (let t = -Math.floor(lim / step) * step; t <= lim + 1e-9; t += step) { s("line", { x1: x(t), x2: x(t), y1: 0, y2: H - 22, stroke: Math.abs(t) < 1e-9 ? "var(--axis)" : "var(--grid)" }, svg); s("text", { x: x(t), y: H - 8, class: "tick", "text-anchor": "middle" }, svg, (t > 1e-9 ? "+" : "") + Math.round(100 * t)); }
+    F.forEach((f, i) => {
+      const y = 12 + i * rh, col = f.verdict.cls === "good" ? "var(--series-1)" : f.verdict.cls === "bad" ? "var(--div-neg)" : "var(--sys-base)", g = s("g", {}, svg);
+      s("text", { x: L - 8, y: y + 4, class: "lbl", "text-anchor": "end" }, svg, pairLabel(f));
+      s("rect", { x: L, y: y - 11, width: W - L - R, height: 22, class: "hit" }, g);
+      s("line", { x1: x(f.boot.lo), x2: x(f.boot.hi), y1: y, y2: y, stroke: col, "stroke-width": 2, "stroke-linecap": "round" }, g);
+      s("circle", { cx: x(f.boot.point), cy: y, r: 5, fill: col, stroke: "var(--surface-1)", "stroke-width": 2 }, g);
+      hover(g, () => [`${runLabel(f.a)} vs ${runLabel(f.b)}`, [{ value: fmtGap(f.boot.point), label: "gap", color: col }, { value: `[${fmtGap(f.boot.lo)}, ${fmtGap(f.boot.hi)}]`, label: "95% CI" }, { value: `${f.verdict.icon} ${f.verdict.text}`, label: `Holm p ${fmtP(f.holm)}` }]]);
+    });
+    s("text", { x: W - R, y: H + 6, class: "tick", "text-anchor": "end" }, svg, metric().binary ? "gap (pp)" : "gap (rubric points)");
+    return { table: { cols: ["System", "Reference", "Gap", "95% low", "95% high"], rows: F.map(f => [runLabel(f.a), runLabel(f.b), fmtGap(f.boot.point), fmtGap(f.boot.lo), fmtGap(f.boot.hi)]) } };
+  });
+}
+function renderBoot(cs, F) {
+  const pick = [F.find(f => f.a === ROLE.improved && f.b === ROLE.openBase), F.find(f => f.a === ROLE.improved && f.b === ROLE.frontierBest)].filter(Boolean);
+  card("r-boot", "Would the headline gaps survive different videos?", `${REPS.toLocaleString()} resampled sets of videos each. Shaded = middle 95%; the vertical rule is zero.`, body => {
+    pick.forEach(f => {
+      const cell = h("div", { style: "margin-bottom:10px" }, body);
+      h("div", { class: "legend" }, cell, `${runLabel(f.a)} vs ${runLabel(f.b)}: ${fmtGap(f.boot.point)} · ${f.verdict.icon} ${f.verdict.text.toLowerCase()}`);
+      const W = width(cell), H = 110, L = 6, R = 6, B = 20, nb = 34, lim = Math.max(.1, Math.abs(f.boot.gaps[0]), Math.abs(f.boot.gaps[REPS - 1]));
+      const xs = v => L + (W - L - R) * (v + lim) / (2 * lim), bw = 2 * lim / nb, counts = new Array(nb).fill(0);
+      f.boot.gaps.forEach(g => counts[Math.min(nb - 1, Math.max(0, Math.floor((g + lim) / bw)))]++);
+      const cmax = Math.max(...counts), svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, cell), pw = (W - L - R) / nb;
+      s("rect", { x: xs(f.boot.lo), y: 0, width: Math.max(1, xs(f.boot.hi) - xs(f.boot.lo)), height: H - B, fill: "var(--wash)" }, svg);
+      counts.forEach((c, i) => { if (!c) return; const g = s("g", {}, svg), lo = -lim + i * bw; s("rect", { x: L + i * pw, y: 0, width: pw, height: H - B, class: "hit" }, g); s("path", { d: barPathV(L + i * pw + 1, H - B, pw - 2, (H - B - 8) * c / cmax, 2), fill: "var(--series-1)" }, g); hover(g, () => [`gap ${fmtGap(lo)} to ${fmtGap(lo + bw)}`, [{ value: c.toLocaleString(), label: "resamples" }]]); });
+      s("line", { x1: L, x2: W - R, y1: H - B, y2: H - B, stroke: "var(--axis)" }, svg);
+      s("line", { x1: xs(0), x2: xs(0), y1: 0, y2: H - B, stroke: "var(--text-secondary)", "stroke-width": 1.5 }, svg);
+      [[-lim, "start"], [0, "middle"], [lim, "end"]].forEach(([v, a]) => s("text", { x: xs(v), y: H - 5, class: "tick", "text-anchor": a }, svg, fmtGap(v)));
+    });
+    return { table: { cols: ["Comparison", "Gap", "2.5%", "97.5%"], rows: pick.map(f => [`${runLabel(f.a)} vs ${runLabel(f.b)}`, fmtGap(f.boot.point), fmtGap(f.boot.lo), fmtGap(f.boot.hi)]) } };
+  });
+}
+function renderPower(cs, F) {
+  card("r-power", "Power: which gains can this test set detect?", "Smallest accuracy gain McNemar detects with 80% power at α = 0.05, by number of claims, for three rates of disagreement between the two systems. The dot is this test set.", body => {
+    const pds = [.2, .3, .45], cols = ["var(--seq-3)", "var(--seq-5)", "var(--seq-7)"], ns = []; for (let n = 30; n <= 600; n += 10) ns.push(n);
+    legend(body, pds.map((p, i) => [`${pct(p, 0)} of claims disagree`, cols[i]]));
+    const W = width(body), L = 46, R = 16, T = 10, B = 34, H = 240, X = n => L + (W - L - R) * (n - 30) / 570, Y = d => H - B - (H - B - T) * d / .5;
+    const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+    [0, .1, .2, .3, .4, .5].forEach(t => { s("line", { x1: L, x2: W - R, y1: Y(t), y2: Y(t), stroke: "var(--grid)" }, svg); s("text", { x: L - 6, y: Y(t) + 4, class: "tick", "text-anchor": "end" }, svg, `${Math.round(100 * t)} pp`); });
+    [30, 100, 200, 300, 400, 500, 600].forEach(n => s("text", { x: X(n), y: H - B + 16, class: "tick", "text-anchor": "middle" }, svg, n));
+    s("text", { x: W - R, y: H - 2, class: "tick", "text-anchor": "end" }, svg, "claims in the test set");
+    pds.forEach((p, i) => { const pts = ns.map(n => [n, mde(n, p)]).filter(x => x[1] != null && x[1] <= .5); s("path", { d: "M" + pts.map(([n, d]) => `${X(n)},${Y(d)}`).join("L"), fill: "none", stroke: cols[i], "stroke-width": 2, "stroke-linejoin": "round" }, svg); });
+    const main = F[0], pd = main ? Math.max(.05, (main.nA + main.nB) / cs.length) : .3, md = mde(cs.length, pd);
+    if (md != null) { const g = s("g", {}, svg); s("circle", { cx: X(cs.length), cy: Y(Math.min(md, .5)), r: 14, class: "hit" }, g); s("circle", { cx: X(cs.length), cy: Y(Math.min(md, .5)), r: 6, fill: "var(--text-primary)", stroke: "var(--surface-1)", "stroke-width": 2 }, g); s("text", { x: X(cs.length) + 10, y: Y(Math.min(md, .5)) - 8, class: "lbl" }, g, `this set: ${cs.length} claims → ${Math.round(100 * md)} pp`); hover(g, () => ["This test set", [{ value: `${Math.round(100 * md)} pp`, label: `smallest detectable gain at ${pct(pd, 0)} disagreement` }]]); }
+    return { table: { cols: ["Claims", ...pds.map(p => `${pct(p, 0)} disagree`)], rows: [50, 65, 100, 200, 400].map(n => [n, ...pds.map(p => { const d = mde(n, p); return d ? `${Math.round(100 * d)} pp` : "–"; })]) } };
+  });
+}
+function renderAreas(cs) {
+  card("r-areas", "Rubric heatmap: 5 areas", "Rows are runs, columns the five rubric areas (weight in brackets). Cell = average share of applicable checks passed. Shade: darker is better. The Rubric tab defines every check.", body => {
+    const runs = RUNS.slice().sort((a, b) => mean(cs.map(c => row(b, c).score)) - mean(cs.map(c => row(a, c).score)));
+    const A = Object.keys(RUB.areas), W = width(body, 1100), L = 290, R = 80, rh = 24, T = 34, cw = (W - L - R) / A.length, H = T + runs.length * rh + 4;
+    const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body), tbl = [];
+    A.forEach((a, j) => s("text", { x: L + j * cw + cw / 2, y: T - 10, class: "lbl", "text-anchor": "middle" }, svg, `${RUB.areas[a].name} (${RUB.areas[a].weight})`));
+    s("text", { x: W - R + 40, y: T - 10, class: "lbl", "text-anchor": "middle" }, svg, "Score");
+    runs.forEach((r, i) => {
+      const y = T + i * rh; s("text", { x: L - 8, y: y + 15, class: r === ROLE.improved ? "lbl-strong" : "lbl", "text-anchor": "end" }, svg, runLabel(r));
+      const vals = A.map(a => { const v = cs.map(c => row(r, c).areas[a]).filter(x => x != null); return v.length ? mean(v) : null; });
+      vals.forEach((v, j) => {
+        const g = s("g", {}, svg), step = v == null ? 0 : Math.min(7, 1 + Math.floor(v * 6.999));
+        s("rect", { x: L + j * cw + 1, y: y + 1, width: cw - 2, height: rh - 2, rx: 3, fill: step ? `var(--seq-${step})` : "var(--page)" }, g);
+        const light = isDark() ? step <= 4 : step >= 4;
+        s("text", { x: L + j * cw + cw / 2, y: y + 16, "text-anchor": "middle", style: `font-size:11.5px;font-variant-numeric:tabular-nums;fill:${step ? (light ? "#fff" : "#0b0b0b") : "var(--text-muted)"}` }, g, v == null ? "n/a" : pct(v, 0));
+        hover(g, () => [`${runLabel(r)} · ${RUB.areas[A[j]].name}`, [{ value: v == null ? "n/a" : pct(v, 1), label: "of applicable checks passed" }]]);
+      });
+      const sc = mean(cs.map(c => row(r, c).score)); s("text", { x: W - R + 40, y: y + 16, class: "val", "text-anchor": "middle" }, svg, sc.toFixed(1));
+      tbl.push([runLabel(r), ...vals.map(v => v == null ? "n/a" : pct(v, 0)), sc.toFixed(1)]);
+    });
+    return { table: { cols: ["Run", ...A.map(a => RUB.areas[a].name), "Score"], rows: tbl } };
+  });
+}
+function renderItems(cs) {
+  card("r-items", "Rubric drill-down: all 50 checks", "Pass rate of each check for each run, over the claims where it applies. Blank = never applicable in this slice. Hover a cell for the check's wording.", body => {
+    const runs = RUNS, items = RUB.items, W = width(body, 1100), L = 290, R = 10, T = 28, rh = 18, cw = (W - L - R) / items.length, H = T + runs.length * rh + 6;
+    const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body), tbl = [];
+    items.forEach((it, j) => { if (j % 10 === 0) s("text", { x: L + j * cw + 2, y: T - 14, class: "lbl" }, svg, `${it.area} · ${RUB.areas[it.area].name}`); s("text", { x: L + j * cw + cw / 2, y: T - 3, class: "tick", "text-anchor": "middle", style: "font-size:8.5px" }, svg, it.id.slice(1)); });
+    runs.forEach((r, i) => {
+      const y = T + i * rh; s("text", { x: L - 8, y: y + 13, class: "lbl", "text-anchor": "end", style: "font-size:11px" }, svg, runLabel(r));
+      const rates = items.map((it, j) => { const v = cs.map(c => row(r, c).items[j]).filter(x => x != null); return v.length ? [mean(v), v.length] : null; });
+      rates.forEach((rt, j) => {
+        if (!rt) return; const step = Math.min(7, 1 + Math.floor(rt[0] * 6.999)), g = s("g", {}, svg);
+        s("rect", { x: L + j * cw + .5, y: y + .5, width: cw - 1, height: rh - 1, rx: 2, fill: `var(--seq-${step})` }, g);
+        hover(g, () => [`${items[j].id} · ${items[j].criterion}`, [{ value: pct(rt[0], 0), label: `passed, ${runLabel(r)}` }, { value: String(rt[1]), label: `claims where it applies (${items[j].method})` }]]);
+      });
+      tbl.push([runLabel(r), ...rates.map(rt => rt ? pct(rt[0], 0) : "")]);
+    });
+    return { table: { cols: ["Run", ...items.map(it => it.id)], rows: tbl } };
+  });
+}
+function renderConfusion(cs) {
+  card("r-confusion", "What each system answers, by the fact-checker's label", "Rows: fact-checker. Columns: system. The outlined diagonal is correct; shade = share of the row.", body => {
+    const wrap = h("div", { style: `display:grid;grid-template-columns:repeat(${Math.min(4, HEAD.length)},minmax(0,1fr));gap:18px` }, body), tbl = [];
+    HEAD.forEach(([n, r, col]) => {
+      const cell = h("div", {}, wrap); legend(cell, [[`${n}: ${runLabel(r)}`, col]]);
+      const W = width(cell, 260), L = 86, T = 30, cw = (W - L) / 3, ch = 36, H = T + 3 * ch + 4, svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, cell);
+      LABELS.forEach((p, j) => s("text", { x: L + j * cw + cw / 2, y: T - 8, class: "tick", "text-anchor": "middle" }, svg, p));
+      LABELS.forEach((g, i) => {
+        const inRow = cs.filter(c => c.gold === g); s("text", { x: L - 6, y: T + i * ch + ch / 2 + 4, class: "lbl", "text-anchor": "end" }, svg, `${g} (${inRow.length})`);
+        LABELS.forEach((p, j) => {
+          const k = inRow.filter(c => row(r, c).pred === p).length, sh = inRow.length ? k / inRow.length : 0, step = k ? Math.min(7, 1 + Math.floor(sh * 6.999)) : 0, grp = s("g", {}, svg);
+          s("rect", { x: L + j * cw + 1, y: T + i * ch + 1, width: cw - 2, height: ch - 2, rx: 4, fill: step ? `var(--seq-${step})` : "var(--page)" }, grp);
+          if (i === j) s("rect", { x: L + j * cw + 2.5, y: T + i * ch + 2.5, width: cw - 5, height: ch - 5, rx: 3, fill: "none", stroke: "var(--text-primary)", "stroke-opacity": .35 }, grp);
+          const light = isDark() ? step <= 4 : step >= 4;
+          s("text", { x: L + j * cw + cw / 2, y: T + i * ch + ch / 2 + 4, "text-anchor": "middle", style: `font-size:12px;fill:${step ? (light ? "#fff" : "#0b0b0b") : "var(--text-muted)"}` }, grp, k);
+          hover(grp, () => [runLabel(r), [{ value: `${k} claims (${pct(sh, 0)} of row)`, label: `fact-checker ${g} → system ${p}` }]]);
+          tbl.push([runLabel(r), g, p, k]);
+        });
+      });
+    });
+    return { table: { cols: ["Run", "Fact-checker", "System", "Claims"], rows: tbl } };
+  });
+}
+function stacked(body, rowsDef, parts, total) {
+  const W = width(body), L = 150, R = 10, rh = 30, H = rowsDef.length * rh + 4, svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+  rowsDef.forEach((rd, i) => {
+    const y = 4 + i * rh; s("text", { x: L - 8, y: y + 14, class: rd.strong ? "lbl-strong" : "lbl", "text-anchor": "end" }, svg, rd.name.length > 24 ? rd.name.slice(0, 23) + "…" : rd.name);
+    let x0 = L; const counts = parts.map(p => rd.count(p.key)), tot = total || counts.reduce((a, b) => a + b, 0) || 1;
+    parts.forEach((p, j) => {
+      const w = (W - L - R) * counts[j] / tot; if (w <= 0) return;
+      const g = s("g", {}, svg), ww = Math.max(0, w - (x0 + w >= W - R - .5 ? 0 : 2));
+      s("rect", { x: x0, y, width: ww, height: 20, rx: 3, fill: p.color }, g);
+      const lab = pct(counts[j] / tot, 0); if (ww > lab.length * 6.5 + 8) s("text", { x: x0 + ww / 2, y: y + 14, "text-anchor": "middle", style: `font-size:11px;fill:${p.ink || "#fff"}` }, g, lab);
+      hover(g, () => [rd.name, [{ value: `${counts[j]} (${lab})`, label: p.name, color: p.color }]]); x0 += w;
+    });
+  });
+}
+function renderMix(cs) {
+  card("r-mix", "Label mix", "How often each system says each label, next to the fact-checkers.", body => {
+    legend(body, LABELS.map(l => [l, LABEL_COLOR[l]]));
+    const rd = [{ name: "Fact-checkers", strong: true, count: l => cs.filter(c => c.gold === l).length }, ...HEAD.map(([n, r]) => ({ name: n, count: l => cs.filter(c => row(r, c).pred === l).length }))];
+    stacked(body, rd, LABELS.map(l => ({ key: l, name: l, color: LABEL_COLOR[l], ink: l === "unverified" ? "#0b0b0b" : "#fff" })));
+    return { table: { cols: ["Who", ...LABELS], rows: rd.map(r => [r.name, ...LABELS.map(l => r.count(l))]) } };
+  });
+}
+const FAIL = [["correct and backed", "var(--series-1)"], ["correct, no citation", "var(--seq-2)"], ["correct, cited source doesn't resolve", "var(--seq-3)"], ["correct, quote not in source", "var(--seq-4)"], ["correct, judge rejects quote", "var(--seq-6)"], ["wrong abstention", "var(--lab-unverified)"], ["over-claim", "var(--warn)"], ["wrong label", "var(--series-2)"], ["flip (supported <-> contradicted)", "var(--div-neg)"], ["unparseable output", "var(--text-primary)"]];
+function renderFailures(cs) {
+  card("r-failures", "Failure modes", "One name per answer, most severe first (definitions on the Rubric tab).", body => {
+    const present = FAIL.filter(([f]) => HEAD.some(([, r]) => cs.some(c => row(r, c).failure === f)));
+    legend(body, present.map(([f, c]) => [f, c]));
+    const rd = HEAD.map(([n, r]) => ({ name: n, count: f => cs.filter(c => row(r, c).failure === f).length }));
+    stacked(body, rd, present.map(([f, c]) => ({ key: f, name: f, color: c, ink: ["var(--seq-2)", "var(--seq-3)", "var(--lab-unverified)", "var(--warn)"].includes(c) ? "#0b0b0b" : "#fff" })));
+    return { table: { cols: ["Run", ...present.map(p => p[0])], rows: HEAD.map(([n, r]) => [runLabel(r), ...present.map(([f]) => cs.filter(c => row(r, c).failure === f).length)]) } };
+  });
+}
+function renderFunnelR(cs) {
+  card("r-funnel", "Citation funnel", "Every citation must pass three checks in order. Closed-book URLs are fetched live; retrieval citations point at passages the system was given.", body => {
+    headLegend(body);
+    const st = [["Citations given", c => true], ["Source resolves", c => c.resolves], ["Quote is in the source", c => c.quote_found], ["Judge: backs the label", c => c.ok]];
+    const cnt = (r, f) => cs.reduce((n, c) => n + row(r, c).cites.filter(f).length, 0), mx = Math.max(1, ...HEAD.map(([, r]) => cnt(r, st[0][1])));
+    const step = [1, 2, 5, 10, 20, 25, 50, 100].find(x => mx / x <= 6) || 200, max = Math.ceil(mx / step) * step;
+    groupedHBar(body, { groups: st.map(([n, f]) => ({ key: n, label: n, f })), series: headSeries(), value: (g, sr) => cnt(sr.run, g.f), max, ticks: Array.from({ length: max / step + 1 }, (_, i) => i * step), tickFmt: v => String(v), fmt: (v, g, sr) => g.key === st[0][0] ? String(v) : `${v} (${pct(v / Math.max(1, cnt(sr.run, st[0][1])), 0)})` });
+    return { table: { cols: ["Stage", ...HEAD.map(x => x[0])], rows: st.map(([n, f]) => [n, ...HEAD.map(([, r]) => cnt(r, f))]) } };
+  });
+}
+function scatter(body, pts, { xName, yName, xFmt, yFmt, bubble }) {
+  const W = width(body), L = 50, R = 30, T = 14, B = 36, H = 270;
+  const xmax = Math.max(...pts.map(p => p.x)) * 1.12 || 1, ymax = Math.min(1, Math.max(.5, ...pts.map(p => p.y)) + .1);
+  const X = v => L + (W - L - R) * v / xmax, Y = v => H - B - (H - B - T) * v / ymax, svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body);
+  for (let t = 0; t <= ymax + 1e-9; t += .1) { s("line", { x1: L, x2: W - R, y1: Y(t), y2: Y(t), stroke: "var(--grid)" }, svg); if (Math.round(t * 10) % 2 === 0) s("text", { x: L - 6, y: Y(t) + 4, class: "tick", "text-anchor": "end" }, svg, yFmt(t)); }
+  [0, .25, .5, .75, 1].forEach(f => s("text", { x: X(f * xmax), y: H - B + 16, class: "tick", "text-anchor": "middle" }, svg, xFmt(f * xmax)));
+  s("text", { x: W - R, y: H - 2, class: "tick", "text-anchor": "end" }, svg, xName);
+  const bmax = Math.max(...pts.map(p => p.b || 1));
+  pts.forEach(p => {
+    const g = s("g", {}, svg), rr = bubble ? 5 + 11 * Math.sqrt((p.b || 0) / bmax) : 6;
+    s("circle", { cx: X(p.x), cy: Y(p.y), r: Math.max(12, rr), class: "hit" }, g);
+    s("circle", { cx: X(p.x), cy: Y(p.y), r: rr, fill: p.color, "fill-opacity": bubble ? .75 : 1, stroke: "var(--surface-1)", "stroke-width": 2 }, g);
+    if (p.label) s("text", { x: X(p.x) + rr + 4, y: Y(p.y) + 4, class: "tick" }, g, p.label);
+    hover(g, () => [p.name, p.tip]);
+  });
+}
+function renderCost(cs) {
+  card("r-cost", "Accuracy vs cost", "Each dot is a run. x = cost per claim (tokens when prices aren't set), y = the metric, bubble size = model seconds per claim. Up and to the left is better.", body => {
+    legend(body, [["Open, off the shelf", TIER_COLOR.open], ["Open + harness / fine-tune", TIER_COLOR.improved], ["Frontier", TIER_COLOR.frontier]], true);
+    const anyCost = RUNS.some(r => r.usage.cost_usd), anyTok = RUNS.some(r => r.usage.prompt_tokens);
+    const xv = r => (anyCost ? r.usage.cost_usd || 0 : anyTok ? (r.usage.prompt_tokens + r.usage.completion_tokens) / 1000 : r.usage.calls) / Math.max(1, r.n_verdicts);
+    const xName = anyCost ? "USD per claim" : anyTok ? "thousand tokens per claim" : "model calls per claim";
+    const pts = RUNS.map(r => ({ x: xv(r), y: avg(cs, r), b: r.usage.latency_s / Math.max(1, r.n_verdicts), color: TIER_COLOR[tierOf(r)], name: runLabel(r), label: r === ROLE.improved || r === ROLE.frontierBest ? r.name.split(" ")[0] : null,
+      tip: [{ value: fmtV(avg(cs, r)), label: metric().name }, { value: xv(r).toFixed(anyCost ? 4 : 2), label: xName }, { value: (r.usage.latency_s / Math.max(1, r.n_verdicts)).toFixed(1) + " s", label: "model time per claim" }] }));
+    scatter(body, pts, { xName, yName: metric().name, xFmt: v => anyCost ? "$" + v.toFixed(3) : v.toFixed(1), yFmt: v => metric().binary ? pct(v, 0) : String(Math.round(100 * v)), bubble: true });
+    return { table: { cols: ["Run", metric().name, xName, "s per claim"], rows: RUNS.map(r => [runLabel(r), fmtV(avg(cs, r)), xv(r).toFixed(3), (r.usage.latency_s / Math.max(1, r.n_verdicts)).toFixed(2)]) } };
+  });
+}
+function renderCoverage(cs) {
+  card("r-coverage", "Coverage vs precision", "x = share of claims where the system commits to supported/contradicted; y = label accuracy on those claims. Abstaining more should buy precision.", body => {
+    legend(body, [["Open, off the shelf", TIER_COLOR.open], ["Open + harness / fine-tune", TIER_COLOR.improved], ["Frontier", TIER_COLOR.frontier]], true);
+    const pts = RUNS.map(r => { const dec = cs.filter(c => row(r, c).pred !== "unverified"); const cov = dec.length / cs.length, prec = dec.length ? mean(dec.map(c => row(r, c).correct)) : 0;
+      return { x: cov, y: prec, color: TIER_COLOR[tierOf(r)], name: runLabel(r), label: r === ROLE.improved ? "improved" : null, tip: [{ value: pct(cov, 0), label: "commits" }, { value: pct(prec, 0), label: `right when it commits (${dec.length} claims)` }] }; });
+    scatter(body, pts, { xName: "coverage (share of claims labeled supported/contradicted)", yName: "precision", xFmt: v => pct(v, 0), yFmt: v => pct(v, 0) });
+    return { table: { cols: ["Run", "Coverage", "Precision"], rows: pts.map(p => [p.name, pct(p.x, 0), pct(p.y, 0)]) } };
+  });
+}
+function renderWaterfall(cs) {
+  const steps = ["closed_book", "rag", "rag_qa", "rag_qa_verify", "agent", "vote"].map(sy => runOf(M.base_open, sy)).filter(Boolean);
+  if (ROLE.improved && ROLE.improved.model !== M.base_open) steps.push(ROLE.improved);
+  card("r-waterfall", `Ablation on ${MODEL[M.base_open].name}`, "Each step's change versus the step before it, ending with the fine-tune on the final harness. Steps D and E branch from C.", body => {
+    const W = width(body), L = 170, R = 60, rh = 28, H = steps.length * rh + 30, vals = steps.map(r => avg(cs, r));
+    const lo = Math.min(0, ...vals), hi = Math.max(...vals, .01), x = v => L + (W - L - R) * (v - lo) / (hi - lo || 1);
+    const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body), tbl = [];
+    steps.forEach((r, i) => {
+      const prevIdx = r.system === "agent" || r.system === "vote" || r.model !== M.base_open ? steps.findIndex(z => z.system === M.final_system && z.model === M.base_open) : i - 1;
+      const prev = prevIdx >= 0 ? vals[prevIdx] : 0, v = vals[i], y = 6 + i * rh, g = s("g", {}, svg);
+      const col = i === 0 ? "var(--sys-base)" : v >= prev ? "var(--div-pos)" : "var(--div-neg)";
+      s("text", { x: L - 8, y: y + 14, class: "lbl", "text-anchor": "end" }, svg, i === 0 ? "Off the shelf" : r.model !== M.base_open ? "+ fine-tune (on C)" : `+ ${r.sys_name}`);
+      s("rect", { x: L, y, width: W - L, height: 20, class: "hit" }, g);
+      const x0 = x(i === 0 ? lo : prev), x1 = x(v); s("rect", { x: Math.min(x0, x1), y: y + 2, width: Math.max(2, Math.abs(x1 - x0)), height: 16, rx: 3, fill: col }, g);
+      s("text", { x: Math.max(x0, x1) + 6, y: y + 14, class: "val" }, g, i === 0 ? fmtV(v) : `${fmtGap(v - prev)} → ${fmtV(v)}`);
+      hover(g, () => [runLabel(r), [{ value: fmtV(v), label: metric().name, color: col }, ...(i ? [{ value: fmtGap(v - prev), label: "vs previous step" }] : [])]]);
+      tbl.push([runLabel(r), fmtV(v), i ? fmtGap(v - prev) : ""]);
+    });
+    return { table: { cols: ["Step", metric().name, "Change"], rows: tbl } };
+  });
+}
+function renderExample(cs) {
+  card("r-example", "Before / after on one claim", "A claim the off-the-shelf model got wrong or couldn't back and the improved system got right with a checked citation. Pick another claim on the Claims tab.", body => {
+    if (!ROLE.improved) return;
+    const cands = cs.filter(c => row(ROLE.improved, c).sb_correct && !row(ROLE.openBase, c).sb_correct).sort((a, b) => b.traps.length - a.traps.length);
+    const c = cands[0] || cs[0]; if (!c) return;
+    const top = h("div", { style: "margin-bottom:8px" }, body); h("b", {}, top, `“${c.claim}”`);
+    const m = h("div", { class: "desc" }, body); m.appendChild(document.createTextNode(`${c.speaker || ""} · ${c.claim_date} · fact-checker: `)); chip(m, c.gold); m.appendChild(document.createTextNode("  · traps: " + c.traps.map(t => RUB.traps[t].name).join(", ")));
+    const grid = h("div", { style: "display:grid;grid-template-columns:1fr 1fr;gap:16px" }, body);
+    [[`Before: ${runLabel(ROLE.openBase)}`, ROLE.openBase], [`After: ${runLabel(ROLE.improved)}`, ROLE.improved]].forEach(([t, r]) => answerBox(grid, t, row(r, c)));
+  });
+}
+function answerBox(parent, title, rw) {
+  const col = h("div", { style: "border:1px solid var(--grid);border-radius:8px;padding:10px 12px;background:var(--page)" }, parent);
+  h("div", { style: "font-weight:600;margin-bottom:4px" }, col, title);
+  const l = h("div", {}, col); chip(l, rw.pred); h("span", { class: rw.correct ? "ok" : "no" }, l, rw.correct ? "  ✓ right label" : "  ✗ wrong label"); h("span", { class: rw.pred === "unverified" ? "na" : rw.backed ? "ok" : "no" }, l, rw.pred === "unverified" ? "  (abstained: no citation needed)" : rw.backed ? "  ✓ backed" : "  ✗ not backed");
+  h("div", { class: "muted", style: "font-size:12px;margin:4px 0" }, col, `rubric ${rw.score.toFixed(1)} · ${rw.failure}`);
+  h("div", { style: "font-size:13px" }, col, rw.rationale || "(no rationale)");
+  if (!rw.cites.length) h("div", { class: "muted", style: "font-size:12px;margin-top:4px" }, col, "No citations.");
+  rw.cites.forEach(z => { const ci = h("div", { class: "cite" }, col); h("div", {}, ci, `“${z.quote}”`); const mm = h("div", { class: "muted" }, ci); mm.appendChild(document.createTextNode((z.url || "").replace(/^https?:\/\/(www\.)?/, "").slice(0, 60) + "  ")); [["resolves", z.resolves], ["verbatim", z.quote_found], ["backs label", z.backs]].forEach(([n, ok]) => h("span", { class: ok ? "ok" : "no" }, mm, ` ${ok ? "✓" : "✗"} ${n}`)); });
+}
+function breakdown(id, title, desc, cs, groupsOf) {
+  card(id, title, desc, body => {
+    headLegend(body);
+    const groups = groupsOf(cs).filter(g => g.cs.length >= 3);
+    if (!groups.length) { h("div", { class: "desc" }, body, "No group has 3+ claims in this slice."); return; }
+    groupedHBar(body, { groups: groups.map(g => ({ ...g, sub: `n = ${g.cs.length}` })), series: headSeries(), value: (g, sr) => avg(g.cs, sr.run), fmt: v => fmtV(v), max: 1, tickFmt: v => metric().binary ? pct(v, 0) : String(Math.round(100 * v)) });
+    return { table: { cols: ["Group", "n", ...HEAD.map(x => x[0])], rows: groups.map(g => [g.label, g.cs.length, ...HEAD.map(([, r]) => fmtV(avg(g.cs, r)))]) } };
+  });
+}
+function renderVideo(cs) {
+  card("r-video", `${cap(metric().name)} per video`, "One row per source video, most claims first; the bootstrap resamples these rows. Try the \"Without the largest video\" filter.", body => {
+    headLegend(body);
+    const by = {}; cs.forEach(c => (by[c.video] = by[c.video] || []).push(c));
+    const vids = Object.entries(by).sort((a, b) => b[1].length - a[1].length), W = width(body, 1100), L = 300, R = 30, rh = 22, H = vids.length * rh + 30, X = v => L + (W - L - R) * v;
+    const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, body), tbl = [];
+    [0, .25, .5, .75, 1].forEach(t => { s("line", { x1: X(t), x2: X(t), y1: 0, y2: H - 22, stroke: "var(--grid)" }, svg); s("text", { x: X(t), y: H - 6, class: "tick", "text-anchor": "middle" }, svg, metric().binary ? pct(t, 0) : String(100 * t)); });
+    vids.forEach(([v, list], i) => {
+      const y = 10 + i * rh, spk = list[0].speaker || "unknown";
+      s("line", { x1: L, x2: W - R, y1: y, y2: y, stroke: "var(--grid)" }, svg);
+      s("text", { x: L - 10, y: y + 4, class: "lbl", "text-anchor": "end" }, svg, `${spk.length > 32 ? spk.slice(0, 31) + "…" : spk} · ${list.length}`);
+      HEAD.forEach(([n, r, col], k) => { const g = s("g", {}, svg), cx = X(avg(list, r)), cy = y + (k - (HEAD.length - 1) / 2) * 4; s("circle", { cx, cy, r: 11, class: "hit" }, g); s("circle", { cx, cy, r: 4.5, fill: col, stroke: "var(--surface-1)", "stroke-width": 2 }, g); hover(g, () => [`${spk} (${list.length} claims)`, HEAD.map(([nn, rr, cc]) => ({ value: fmtV(avg(list, rr)), label: nn, color: cc }))]); });
+      tbl.push([spk, v.replace("yt:", ""), list.length, ...HEAD.map(([, r]) => fmtV(avg(list, r)))]);
+    });
+    return { table: { cols: ["Speaker", "Video", "Claims", ...HEAD.map(x => x[0])], rows: tbl } };
+  });
+}
+function renderExtract(cs) {
+  card("r-extract", "Can the model find the claims itself?", "Extraction recall = share of the fact-checker's claims the model pulled out of the transcript. End-to-end also needs the right label on its own wording.", body => {
+    headLegend(body);
+    groupedHBar(body, { groups: [{ key: "matched", label: "Extraction recall" }, { key: "e2e_correct", label: "End-to-end accuracy" }], series: headSeries(), value: (g, sr) => accOf(cs, sr.run, g.key), fmt: v => pct(v) });
+    return { table: { cols: ["Run", "Extraction recall", "End-to-end"], rows: HEAD.map(([, r]) => [runLabel(r), pct(accOf(cs, r, "matched")), pct(accOf(cs, r, "e2e_correct"))]) } };
+  });
+}
+function renderSftChart() {
+  const S = D.sft; if (!S) return;
+  card("s-sft", "Fine-tuning data", "Real counts from 07_sft_data.py: what was removed to keep the test set clean, and the label mix the model trains on.", body => {
+    const drops = Object.entries(S.dropped).sort((a, b) => b[1] - a[1]);
+    groupedHBar(body, { groups: [...drops.map(([k, v]) => ({ key: k, label: k.length > 34 ? k.slice(0, 33) + "…" : k, v, sub: "removed" })), ...Object.entries(S.labels_train).map(([k, v]) => ({ key: k, label: `train: ${k}`, v, sub: "kept" }))],
+      series: [{ name: "examples", color: "var(--series-1)" }], value: g => g.v / S.averitec_rows, fmt: (v, g) => g.v.toLocaleString(), max: Math.max(...drops.map(d => d[1]), ...Object.values(S.labels_train)) / S.averitec_rows * 1.05,
+      ticks: [0], tickFmt: () => "", note: `${S.averitec_rows.toLocaleString()} AVeriTeC claims → ${S.train.toLocaleString()} train + ${S.val.toLocaleString()} validation examples; ${S.augmented_unverified} of them have their evidence removed (labeled unverified).` });
+    return { table: { cols: ["Item", "Count"], rows: [...drops, ...Object.entries(S.labels_train).map(([k, v]) => ["train: " + k, v]), ["validation", S.val]] } };
+  });
+}
+function renderResults() {
+  const cs = slice();
+  document.getElementById("f-count").textContent = `${cs.length} claims · ${new Set(cs.map(c => c.video)).size} videos`;
+  if (!cs.length) return;
+  const F = testFamily(cs);
+  renderHero(cs, F); renderTiers("r-tiers", cs); renderBoard(cs); renderWinrate(cs, F); renderSig("r-sig", cs, F); renderMcnemar(cs, F); renderGaps(cs, F); renderBoot(cs, F); renderPower(cs, F);
+  renderAreas(cs); renderItems(cs); renderConfusion(cs); renderMix(cs); renderFailures(cs); renderFunnelR(cs); renderCoverage(cs); renderCost(cs); renderWaterfall(cs); renderExample(cs);
+  breakdown("r-type", `${cap(metric().name)} by claim type`, "AVeriTeC claim types; a claim can have several. Sample size beside every bar.", cs, cl => { const g = {}; cl.forEach(c => c.claim_types.forEach(t => (g[t] = g[t] || []).push(c))); return Object.entries(g).sort((a, b) => b[1].length - a[1].length).map(([k, v]) => ({ key: k, label: k.replace(" Claim", ""), cs: v })); });
+  breakdown("r-trap", `${cap(metric().name)} by trap`, "Which traps each system handles. Sample size beside every bar.", cs, cl => Object.keys(RUB.traps).map(k => ({ key: k, label: RUB.traps[k].name, cs: cl.filter(c => c.traps.includes(k)) })).sort((a, b) => b.cs.length - a.cs.length));
+  breakdown("r-country", `${cap(metric().name)} by country`, "Where the claim is about (AVeriTeC location code). Local claims are where retrieval is thinnest.", cs, cl => { const g = {}; cl.forEach(c => (g[c.location || "?"] = g[c.location || "?"] || []).push(c)); return Object.entries(g).sort((a, b) => b[1].length - a[1].length).map(([k, v]) => ({ key: k, label: k, cs: v })); });
+  breakdown("r-gold", `${cap(metric().name)} by the fact-checker's label`, "Per-class performance.", cs, cl => LABELS.map(l => ({ key: l, label: l, cs: cl.filter(c => c.gold === l) })));
+  renderExtract(cs); renderSftChart(); renderVideo(cs);
+}
+
+// ---------- CLAIMS TAB ----------
+let selected = null;
+function renderClaims() {
+  const trapSel = document.getElementById("c-trap"), show = document.getElementById("c-show");
+  if (!trapSel.options.length) {
+    h("option", { value: "" }, trapSel, "Any trap"); Object.entries(RUB.traps).forEach(([k, t]) => h("option", { value: k }, trapSel, `${t.name} (${CL.filter(c => c.traps.includes(k)).length})`));
+    [["", "Any outcome"], ["win", "Improved right, baseline wrong"], ["lose", "Improved wrong, baseline right"], ["frontier", "Improved beats best frontier"], ["allwrong", "Every system wrong"], ["flip", "Any flip"]].forEach(([v, t]) => h("option", { value: v }, show, t));
+    ["c-q", "c-trap", "c-gold", "c-show"].forEach(id => document.getElementById(id).addEventListener(id === "c-q" ? "input" : "change", renderClaimList));
+  }
+  renderClaimList();
+}
+function renderClaimList() {
+  const q = document.getElementById("c-q").value.trim().toLowerCase(), trap = document.getElementById("c-trap").value, gold = document.getElementById("c-gold").value, show = document.getElementById("c-show").value;
+  const I = ROLE.improved, B = ROLE.openBase, F = ROLE.frontierBest;
+  const list = CL.filter(c => (!q || (c.claim + " " + c.speaker).toLowerCase().includes(q)) && (!trap || c.traps.includes(trap)) && (!gold || c.gold === gold) &&
+    (!show || (show === "win" && I && row(I, c).sb_correct && !row(B, c).sb_correct) || (show === "lose" && I && !row(I, c).sb_correct && row(B, c).sb_correct) ||
+      (show === "frontier" && I && F && row(I, c).score > row(F, c).score + 2) || (show === "allwrong" && RUNS.every(r => !row(r, c).correct)) || (show === "flip" && RUNS.some(r => row(r, c).flip))));
+  document.getElementById("c-count").textContent = `${list.length} of ${CL.length} claims`;
+  const L = document.getElementById("c-list"); L.replaceChildren();
+  list.forEach(c => {
+    const it = h("div", { class: "claim-item", role: "option", tabindex: "0", "aria-selected": String(selected === c.id) }, L);
+    h("div", { class: "t" }, it, c.claim.length > 140 ? c.claim.slice(0, 139) + "…" : c.claim);
+    const m = h("div", { class: "m" }, it); chip(m, c.gold); m.appendChild(document.createTextNode(` · ${c.speaker || "unknown"} · ${c.traps.length} traps` + (I ? ` · improved ${row(I, c).sb_correct ? "✓" : "✗"} · baseline ${row(B, c).sb_correct ? "✓" : "✗"}` : "")));
+    const pick = () => { selected = c.id; L.querySelectorAll(".claim-item").forEach(x => x.setAttribute("aria-selected", "false")); it.setAttribute("aria-selected", "true"); renderClaimDetail(c); };
+    it.addEventListener("click", pick); it.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+  });
+  const cur = CL.find(c => c.id === selected) || list[0]; if (cur) { selected = cur.id; const idx = list.indexOf(cur); if (idx >= 0) L.children[idx].setAttribute("aria-selected", "true"); renderClaimDetail(cur); }
+}
+function highlight(parent, text, claim) {
+  const want = new Set((claim.toLowerCase().match(/[a-z0-9]+/g) || []).filter(w => w.length > 3 || /\d/.test(w)));
+  text.split(/(\s+)/).forEach(tok => { const k = (tok.toLowerCase().match(/[a-z0-9]+/g) || []).join(""); if (k && want.has(k)) h("mark", {}, parent, tok); else parent.appendChild(document.createTextNode(tok)); });
+}
+function renderClaimDetail(c) {
+  const d = document.getElementById("c-detail"); d.replaceChildren();
+  h("h2", {}, d, `“${c.claim}”`);
+  const m = h("div", { class: "desc" }, d); m.appendChild(document.createTextNode(`${c.speaker || "unknown speaker"} · ${c.claim_date} · ${c.location || "?"} · fact-checker: `)); chip(m, c.gold); m.appendChild(document.createTextNode(` (${c.gold_raw}) · `)); h("a", { href: c.clip_url, target: "_blank", rel: "noopener" }, m, "open the clip ↗");
+
+  h("h4", {}, d, "Why it was selected");
+  const S = c.selection, tr = h("div", { class: "trail" }, d);
+  [["Source", `AVeriTeC ${S.averitec_row}; original post is a YouTube video`], ["Transcript", `${Math.round(S.video_seconds / 60)} min video, captions available`], ["Located by", `${S.located_by} (${Math.round(100 * S.overlap)}% of the claim's words in the clip)`], ["Clip", `${Math.round(S.clip[0])}–${Math.round(S.clip[1])} s, shared with ${S.claims_in_clip - 1} other claim${S.claims_in_clip === 2 ? "" : "s"}`], ["Label", `${c.gold_raw} → ${c.gold}`]]
+    .forEach(([k, v]) => { const x = h("div", {}, tr); h("b", {}, x, k); x.appendChild(document.createTextNode(v)); });
+
+  h("h4", {}, d, "Transcript excerpt (words shared with the claim highlighted)");
+  highlight(h("div", { class: "transcript" }, d), c.transcript, c.claim);
+
+  h("h4", {}, d, `Key traps (${c.traps.length})`);
+  if (!c.traps.length) h("div", { class: "desc" }, d, "No trap tags.");
+  c.traps.forEach(t => { const T = RUB.traps[t], x = h("div", { style: "margin:4px 0 8px" }, d); h("span", { class: "tag" }, x, T.name); x.appendChild(document.createTextNode(` ${T.why} `)); h("span", { class: "muted" }, x, `Expected failure: ${T.failure}`); });
+
+  h("h4", {}, d, "What the fact-checker found");
+  h("div", { style: "font-size:13px;margin-bottom:6px" }, d, c.justification || "(no justification)");
+  if (c.strategies.length) h("div", { class: "desc" }, d, "Strategies: " + c.strategies.join(", "));
+  const qa = h("details", {}, d); h("summary", {}, qa, `Their research: ${c.qa.length} question${c.qa.length === 1 ? "" : "s"}`);
+  c.qa.forEach(x => { const b = h("div", { class: "cite", style: "margin:8px 0" }, qa); h("div", { style: "font-weight:600;color:var(--text-primary)" }, b, x.q); h("div", {}, b, x.a); if (x.url) h("div", { class: "muted" }, b, x.url.replace(/^https?:\/\/(www\.)?/, "").slice(0, 90)); });
+
+  h("h4", {}, d, "How every system answered");
+  const T = h("table", { class: "data" }, d), hr = h("tr", {}, h("thead", {}, T));
+  ["Run", "Label", "Right", "Backed", "Rubric", "Failure mode", ""].forEach(x => h("th", {}, hr, x));
+  const tb = h("tbody", {}, T);
+  RUNS.slice().sort((a, b) => row(b, c).score - row(a, c).score).forEach(r => {
+    const rw = row(r, c), t2 = h("tr", {}, tb);
+    h("td", {}, t2, runLabel(r)); chip(h("td", {}, t2), rw.pred);
+    h("td", { class: rw.correct ? "ok" : "no" }, t2, rw.correct ? "✓" : "✗"); h("td", { class: rw.pred === "unverified" ? "na" : rw.backed ? "ok" : "no", title: rw.pred === "unverified" ? "abstentions need no citation" : null }, t2, rw.pred === "unverified" ? "–" : rw.backed ? "✓" : "✗");
+    h("td", {}, t2, rw.score.toFixed(1)); h("td", { class: "muted" }, t2, rw.failure);
+    const btn = h("button", { type: "button", class: "toggle", style: "font-size:11.5px;padding:2px 7px" }, h("td", {}, t2), "Details");
+    const det = h("tr", { hidden: "" }, tb), dc = h("td", { colspan: "7" }, det);
+    btn.addEventListener("click", () => { det.hidden = !det.hidden; btn.textContent = det.hidden ? "Details" : "Hide"; if (!dc.childNodes.length) claimRunDetail(dc, r, rw); });
+  });
+}
+function claimRunDetail(parent, r, rw) {
+  const g = h("div", { style: "display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px" }, parent);
+  answerBox(g, runLabel(r), rw);
+  const right = h("div", {}, g);
+  h("div", { style: "font-weight:600;font-size:12.5px" }, right, "50 rubric checks (✓ pass · ✗ fail · – n/a)");
+  Object.keys(RUB.areas).forEach(a => {
+    h("div", { class: "muted", style: "font-size:11.5px;margin-top:6px" }, right, `${a} · ${RUB.areas[a].name} (${RUB.areas[a].weight}) · ${rw.areas[a] == null ? "n/a" : pct(rw.areas[a], 0)}`);
+    const grid = h("div", { class: "items-grid" }, right);
+    RUB.items.forEach((it, j) => { if (it.area !== a) return; const v = rw.items[j], sp = h("span", { class: v == null ? "" : v ? "p" : "f", title: `${it.id}: ${it.criterion}` }, grid, `${it.id} ${v == null ? "–" : v ? "✓" : "✗"}`); hover(sp, () => [it.id, [{ value: v == null ? "n/a" : v ? "pass" : "fail", label: it.criterion }]]); });
+  });
+  if (rw.queries && rw.queries.length) { h("div", { class: "muted", style: "font-size:11.5px;margin-top:8px" }, right, "Search queries: " + rw.queries.join(" · ")); }
+}
+
+// ---------- VIDEOS TAB ----------
+const VSTATUS = { "kept": ["In the test set", "var(--series-1)"], "claims not found": ["Transcript, but claims not found", "var(--warn)"], "no transcript": ["No usable transcript", "var(--lab-unverified)"], "not YouTube": ["Not YouTube (needs speech-to-text)", "var(--sys-base)"] };
+const fmtDur = s2 => s2 == null ? "–" : s2 >= 3600 ? `${Math.floor(s2 / 3600)}h ${Math.round(s2 % 3600 / 60)}m` : `${Math.floor(s2 / 60)}:${String(Math.round(s2 % 60)).padStart(2, "0")}`;
+function openClaim(id) { selected = id; document.getElementById("c-q").value = ""; ["c-trap", "c-gold", "c-show"].forEach(i => { const e = document.getElementById(i); if (e) e.value = ""; }); showTab("claims"); }
+function renderVideos() {
+  const V = D.sources || [], K = document.getElementById("v-kpis"); K.replaceChildren();
+  const kept = V.filter(v => v.status === "kept");
+  [["Video sources", V.length, `${V.reduce((n, v) => n + v.claims.length, 0)} fact-checked claims`],
+   ["In the test set", kept.length, `${kept.reduce((n, v) => n + v.n_kept, 0)} claims, ${CL.length ? new Set(CL.map(c => c.selection.clip.join())).size : 0} clips`],
+   ["Median length (kept)", fmtDur(kept.map(v => v.duration).filter(x => x != null).sort((a, b) => a - b)[Math.floor(kept.length / 2)]), `${kept.filter(v => (v.duration || 0) <= 180).length} of ${kept.length} are 3 minutes or less`],
+   ["Most claims in one video", Math.max(...V.map(v => v.n_kept)), (kept[0] || {}).speaker || ""]]
+    .forEach(([l, v, d]) => { const t = h("div", { class: "card tile" }, K); h("div", { class: "label" }, t, l); h("div", { class: "value" }, t, String(v)); h("div", { class: "delta" }, t, d); });
+  card("v-status", "Why videos were dropped", "One bar per reason, counting videos and the claims they carried.", body => {
+    const fates = {}; V.forEach(v => v.claims.forEach(c => { const k = c.fate; fates[k] = fates[k] || { claims: 0, videos: new Set() }; fates[k].claims++; fates[k].videos.add(v.video); }));
+    const rows = Object.entries(fates).sort((a, b) => (a[0] === "kept" ? -1 : b[0] === "kept" ? 1 : b[1].claims - a[1].claims));
+    const total = V.reduce((n, v) => n + v.claims.length, 0);
+    groupedHBar(body, { groups: rows.map(([k, f]) => ({ key: k, label: k.replace("no transcript: ", "").replace(" (transient; not cached)", "").slice(0, 34), sub: `${f.videos.size} video${f.videos.size === 1 ? "" : "s"}`, n: f.claims })),
+      series: [{ name: "claims", color: "var(--series-1)" }], value: g => g.n / total, fmt: (v, g) => `${g.n} claims`, max: Math.max(...rows.map(r => r[1].claims)) / total * 1.1, ticks: [0], tickFmt: () => "" });
+    return { table: { cols: ["Fate", "Videos", "Claims"], rows: rows.map(([k, f]) => [k, f.videos.size, f.claims]) } };
+  });
+  card("v-platform", "Where the videos were posted", "Videos per platform, split by whether they made the test set.", body => {
+    const plats = [...new Set(V.map(v => v.platform))].sort((a, b) => V.filter(v => v.platform === b).length - V.filter(v => v.platform === a).length);
+    const parts = Object.entries(VSTATUS).filter(([k]) => V.some(v => v.status === k));
+    legend(body, parts.map(([, [n, c]]) => [n, c]));
+    stacked(body, plats.map(p => ({ name: `${p} (${V.filter(v => v.platform === p).length})`, count: k => V.filter(v => v.platform === p && v.status === k).length })), parts.map(([k, [n, c]]) => ({ key: k, name: n, color: c, ink: k === "kept" || k === "not YouTube" ? "#fff" : "#0b0b0b" })));
+    return { table: { cols: ["Platform", ...parts.map(p => p[1][0])], rows: plats.map(p => [p, ...parts.map(([k]) => V.filter(v => v.platform === p && v.status === k).length)]) } };
+  });
+  const sf = document.getElementById("v-status-f"), pf = document.getElementById("v-platform-f");
+  if (!sf.options.length) {
+    h("option", { value: "" }, sf, "Any status"); Object.entries(VSTATUS).forEach(([k, [n]]) => h("option", { value: k }, sf, `${n} (${V.filter(v => v.status === k).length})`));
+    h("option", { value: "" }, pf, "Any platform"); [...new Set(V.map(v => v.platform))].forEach(p => h("option", { value: p }, pf, p));
+    ["v-q", "v-status-f", "v-platform-f"].forEach(id => document.getElementById(id).addEventListener(id === "v-q" ? "input" : "change", renderVideoTable));
+  }
+  renderVideoTable();
+}
+function renderVideoTable() {
+  const V = D.sources || [], q = document.getElementById("v-q").value.trim().toLowerCase(), st = document.getElementById("v-status-f").value, pl = document.getElementById("v-platform-f").value;
+  const list = V.filter(v => (!st || v.status === st) && (!pl || v.platform === pl) && (!q || (v.video + " " + v.speaker + " " + v.claims.map(c => c.claim + " " + c.speaker).join(" ")).toLowerCase().includes(q)));
+  document.getElementById("v-count").textContent = `${list.length} of ${V.length} videos`;
+  const T = document.getElementById("v-table"); T.replaceChildren();
+  const hr = h("tr", {}, h("thead", {}, T)); ["Video", "Platform", "Speaker", "Posted / claim date", "Length", "Claims kept", "Status", ""].forEach(c => h("th", {}, hr, c));
+  const tb = h("tbody", {}, T), I = ROLE.improved, B = ROLE.openBase;
+  list.forEach(v => {
+    const tr = h("tr", { class: "claim", tabindex: "0", style: "cursor:pointer" }, tb);
+    const td0 = h("td", {}, tr); h("a", { href: v.url, target: "_blank", rel: "noopener" }, td0, v.video.replace(/^yt:/, "").slice(0, 46));
+    h("td", {}, tr, v.platform); h("td", {}, tr, v.speaker || "–"); h("td", {}, tr, v.date || "–"); h("td", {}, tr, fmtDur(v.duration));
+    h("td", {}, tr, `${v.n_kept} of ${v.claims.length}`);
+    const sc = h("td", {}, tr), [sn, scol] = VSTATUS[v.status]; const ch2 = h("span", { class: "chip" }, sc); h("span", { class: "sw", style: `background:${scol}` }, ch2); ch2.appendChild(document.createTextNode(sn));
+    if (v.status !== "kept" && v.reason) h("div", { class: "muted", style: "font-size:11.5px" }, sc, v.reason);
+    const btn = h("button", { type: "button", class: "toggle", style: "font-size:11.5px;padding:2px 7px" }, h("td", {}, tr), "Claims");
+    const det = h("tr", { hidden: "" }, tb), dc = h("td", { colspan: "8", style: "background:var(--page)" }, det);
+    const toggle = () => {
+      det.hidden = !det.hidden; btn.textContent = det.hidden ? "Claims" : "Hide";
+      if (dc.childNodes.length) return;
+      if (v.clips.length) { const cl = h("div", { class: "desc" }, dc); cl.appendChild(document.createTextNode(`Clips cut from this video (${v.clips.length}): `)); v.clips.forEach((c, i) => { if (i) cl.appendChild(document.createTextNode(" · ")); h("a", { href: c.url, target: "_blank", rel: "noopener" }, cl, `${fmtDur(c.start)}–${fmtDur(c.end)}`); }); }
+      const T2 = h("table", { class: "data" }, dc), h2 = h("tr", {}, h("thead", {}, T2));
+      ["Claim", "Fact-checker label", "Fate", ...(I ? ["Baseline", "Improved"] : []), ""].forEach(c => h("th", {}, h2, c));
+      const b2 = h("tbody", {}, T2);
+      v.claims.forEach(c => {
+        const r2 = h("tr", {}, b2), k = CL.find(x => x.id === c.id);
+        const cc = h("td", {}, r2); h("div", {}, cc, c.claim); h("div", { class: "muted", style: "font-size:11.5px" }, cc, `${c.speaker || "unknown"} · ${c.date}${k ? " · " + k.traps.length + " traps" : ""}`);
+        h("td", {}, r2, c.gold_raw);
+        h("td", { class: c.fate === "kept" ? "ok" : "muted" }, r2, c.fate === "kept" ? "✓ in the test set" : c.fate);
+        if (I) { [B, I].forEach(r => { const td = h("td", {}, r2); if (k) { const rw = row(r, k); chip(td, rw.pred); h("span", { class: rw.sb_correct ? "ok" : "no" }, td, rw.sb_correct ? " ✓" : " ✗"); } else td.textContent = "–"; }); }
+        const td = h("td", {}, r2); if (k) { const b = h("button", { type: "button", class: "toggle", style: "font-size:11.5px;padding:2px 7px" }, td, "Open claim"); b.addEventListener("click", e => { e.stopPropagation(); openClaim(c.id); }); }
+      });
+    };
+    tr.addEventListener("click", e => { if (e.target.closest("a") || e.target.closest("button") && e.target !== btn) return; if (e.target === btn) return; toggle(); });
+    btn.addEventListener("click", e => { e.stopPropagation(); toggle(); });
+    tr.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+  });
+}
+
+// ---------- RUBRIC TAB ----------
+function renderRubric() {
+  card("rb-areas", "The five areas", "Weights sum to 100. Each area's score is the share of its applicable checks passed.", body => {
+    const A = Object.entries(RUB.areas);
+    groupedHBar(body, { groups: A.map(([k, a]) => ({ key: k, label: `${k} · ${a.name}`, sub: `${RUB.items.filter(i => i.area === k && i.method === "auto").length} auto + ${RUB.items.filter(i => i.area === k && i.method === "judge").length} judge`, w: a.weight })), series: [{ name: "weight", color: "var(--series-1)" }], value: g => g.w / 100, fmt: v => `${Math.round(100 * v)} points`, max: .4, ticks: [0, .1, .2, .3, .4], tickFmt: v => String(Math.round(100 * v)) });
+    return { table: { cols: ["Area", "Weight", "Question"], rows: A.map(([k, a]) => [`${k} · ${a.name}`, a.weight, a.desc]) } };
+  });
+  const T = document.getElementById("rb-items"); T.replaceChildren();
+  const hr = h("tr", {}, h("thead", {}, T)); ["ID", "Area", "Check", "Scored by", "Applies when", ...(ROLE.improved ? ["Pass rate: baseline → improved"] : [])].forEach(c => h("th", {}, hr, c));
+  const tb = h("tbody", {}, T), APPLIES = { always: "every answer", gold_decisive: "fact-checker reached a verdict", gold_unverified: "fact-checker found it unverifiable", pred_decisive: "answer is supported/contradicted", pred_unverified: "answer is unverified", has_citations: "answer has citations", has_traps: "claim has a trap tag", matched: "system extracted the claim" };
+  RUB.items.forEach((it, j) => {
+    const tr = h("tr", {}, tb); h("td", {}, tr, it.id); h("td", {}, tr, RUB.areas[it.area].name); h("td", {}, tr, it.criterion);
+    h("td", {}, tr, it.method === "auto" ? "deterministic" : "judge (blind)");
+    h("td", { class: "muted" }, tr, it.applies.startsWith("trap:") ? `trap: ${RUB.traps[it.applies.slice(5)].name}` : APPLIES[it.applies]);
+    if (ROLE.improved) { const rate = r => { const v = CL.map(c => row(r, c).items[j]).filter(x => x != null); return v.length ? pct(mean(v), 0) : "n/a"; }; h("td", {}, tr, `${rate(ROLE.openBase)} → ${rate(ROLE.improved)}`); }
+  });
+  const TT = document.getElementById("rb-traps"); TT.replaceChildren();
+  const h2r = h("tr", {}, h("thead", {}, TT)); ["Trap", "Claims", "How it's detected", "Why it's hard", "Expected failure"].forEach(c => h("th", {}, h2r, c));
+  const tb2 = h("tbody", {}, TT); Object.entries(RUB.traps).forEach(([k, t]) => { const tr = h("tr", {}, tb2); [t.name, CL.filter(c => c.traps.includes(k)).length, t.detect, t.why, t.failure].forEach(x => h("td", {}, tr, x)); });
+  const TF = document.getElementById("rb-failures"); TF.replaceChildren();
+  const h3r = h("tr", {}, h("thead", {}, TF)); ["Failure mode", "Meaning"].forEach(c => h("th", {}, h3r, c));
+  const tb3 = h("tbody", {}, TF);
+  [["unparseable output", "No valid JSON label; scored as unverified"], ["flip (supported <-> contradicted)", "The opposite of the fact-checker's verdict: the most harmful error"], ["wrong abstention", "Said unverified when the fact-checker reached a verdict"], ["over-claim", "Gave a verdict when the fact-checker found the evidence insufficient or cherry-picked"], ["wrong label", "Any other wrong label"], ["correct and backed", "Right label, and a citation passes all three checks (or a correct abstention)"], ["correct, no citation", "Right label with nothing to back it"], ["correct, cited source doesn't resolve", "Right label; every cited URL is dead or invented"], ["correct, quote not in source", "Right label; the quote isn't on the page"], ["correct, judge rejects quote", "Right label; the quote is real but doesn't back the label"]]
+    .forEach(([a, b]) => { const tr = h("tr", {}, tb3); const td = h("td", {}, tr); const c0 = FAIL.find(f => f[0] === a); if (c0) h("span", { style: `display:inline-block;width:10px;height:10px;border-radius:3px;background:${c0[1]};margin-right:6px` }, td); td.appendChild(document.createTextNode(a)); h("td", {}, tr, b); });
+}
+
+// ---------- IMPROVEMENTS TAB ----------
+function renderImprovements() {
+  const T = document.getElementById("im-ideas"); T.replaceChildren();
+  const hr = h("tr", {}, h("thead", {}, T)); ["#", "Idea", "Type", "Status", "The guess about why the baseline fails", "What it does", "Result on the test set"].forEach(c => h("th", {}, hr, c));
+  const tb = h("tbody", {}, T), FAM = testFamily(CL);
+  D.ideas.forEach((it, i) => {
+    const tr = h("tr", {}, tb); h("td", {}, tr, i + 1); h("td", { style: "font-weight:600" }, tr, it.name); h("td", {}, tr, it.type);
+    h("span", { class: `status ${it.status}` }, h("td", {}, tr), it.status); h("td", {}, tr, it.hypothesis); h("td", { class: "muted" }, tr, it.how);
+    let res = "–";
+    if (it.link && D.systems[it.link]) { const r = runOf(M.base_open, it.link); if (r && ROLE.openBase) { const f = FAM.find(f => f.a === r && f.b === ROLE.openBase); res = f ? `${fmtGap(f.boot.point)} vs off the shelf (${f.verdict.text.toLowerCase()})` : "–"; } }
+    else if (it.link === M.improved_model && it.name !== D.ideas.find(x => x.link === M.improved_model).name) res = "part of the fine-tune; not ablated separately";
+    else if (it.link === M.improved_model && ROLE.improved && ROLE.improved !== ROLE.baseFinal && ROLE.baseFinal) { const f = FAM.find(f => f.a === ROLE.improved && f.b === ROLE.baseFinal); res = f ? `fine-tune: ${fmtGap(f.boot.point)} vs base on the same harness` : "–"; }
+    h("td", {}, tr, res);
+  });
+  const arch = document.getElementById("im-arch"); arch.replaceChildren();
+  const rowsA = [["Baseline", ["Clip transcript", "Model answers from memory", "May cite remembered URLs", "Scorer fetches every URL"]],
+    ["A", ["Claim", "2-3 search queries", "Wikipedia / Brave (fact-check sites blocked)", "Label from numbered passages + quote"]],
+    ["B", ["Claim", "2-4 verification questions", "Search each question", "Label, answering the questions first"]],
+    ["C (final)", ["B", "Deterministic verbatim check on each quote", "If it fails: one repair turn listing the failures", "Final label + citations"]],
+    ["D", ["C", "\"Need more?\" — model writes new queries", "Up to 2 extra rounds, max 14 passages", "Label"]],
+    ["E", ["C × 5 at T = 0.7", "Majority label (ties: first sample)", "Citations from a majority sample", "Label"]],
+    ["Fine-tune", ["Prompt of C", "LoRA-tuned labeler", "Trained on fact-checkers' research", "Label + quote"]]];
+  rowsA.forEach(([n, steps]) => { const r = h("div", { class: "flow" }, arch); h("div", { style: "width:90px;font-weight:600;font-size:12.5px" }, r, n); steps.forEach((st, i) => { h("div", { class: "step" }, r, st); if (i < steps.length - 1) h("span", { class: "arrow" }, r, "→"); }); });
+  const S = D.sft || {}, st = document.getElementById("im-sft-steps"); st.replaceChildren();
+  h("h3", {}, st, "How the training data is built (07_sft_data.py)");
+  const ol = h("ol", { class: "prose", style: "padding-left:18px;font-size:13px" }, st);
+  [`Start from all ${(S.averitec_rows || 0).toLocaleString()} AVeriTeC train + dev claims.`,
+   `Remove leakage: ${Object.entries(S.dropped || {}).filter(([k]) => !k.startsWith("decisive")).map(([k, v]) => `${v} ${k}`).join("; ")}.`,
+   "Evidence = the fact-checker's own answers, each with its source URL, shuffled with 2-4 answers from other claims in the same country (hard negatives).",
+   "Questions block = the fact-checker's verification questions, so the prompt matches harness C exactly.",
+   `Target = label + the fact-checker's justification + up to 2 citations quoting the best-matching sentence. Fragments under 5 words or sharing < 2 content words with the claim are never cited (${((S.dropped || {})["decisive label but no citable gold passage"] || 0).toLocaleString()} examples dropped for lack of a citable passage).`,
+   `Evidence dropout: ${S.augmented_unverified || 0} decisive examples lose every gold passage and become unverified.`,
+   `Cap the majority class at 1.5× the next (${S.majority_cap || "–"}), split ${S.train || 0} train / ${S.val || 0} validation (seed ${S.seed ?? 0}).`].forEach(x => h("li", {}, ol, x));
+  card("im-sft-chart", "Training label mix", "The fine-tune's label distribution vs the test set's.", body => {
+    if (!S.labels_train) return; legend(body, LABELS.map(l => [l, LABEL_COLOR[l]]));
+    const tot = Object.values(S.labels_train).reduce((a, b) => a + b, 0);
+    stacked(body, [{ name: "Training set", count: l => S.labels_train[l] || 0 }, { name: "Test set", count: l => CL.filter(c => c.gold === l).length }], LABELS.map(l => ({ key: l, name: l, color: LABEL_COLOR[l], ink: l === "unverified" ? "#0b0b0b" : "#fff" })));
+    return { table: { cols: ["Set", ...LABELS], rows: [["Training", ...LABELS.map(l => S.labels_train[l] || 0)], ["Test", ...LABELS.map(l => CL.filter(c => c.gold === l).length)]] } };
+  });
+  document.getElementById("im-example").textContent = D.sft ? `USER (the harness-C prompt, filled from the fact-checker's research):\n  VIDEO DATE / TRANSCRIPT / CLAIM\n  QUESTIONS TO ANSWER FIRST: the fact-checker's questions\n  EVIDENCE: [1] url answer … [n] url distractor (shuffled)\n  Labels + citation rules (identical to test time)\n\nASSISTANT (the target):\n{"label": "contradicted",\n "rationale": "The French embassy said Macron never made this statement, and EU membership does not require adopting the euro.",\n "citations": [{"id": 2, "quote": "The French embassy have said he never said it."}]}\n\nThe full set is data/sft/train.jsonl in Fireworks chat format.` : "Run 07_sft_data.py.";
+}
+
+// ---------- DEMO TAB ----------
+function renderDemo() {
+  document.querySelectorAll('[data-k="n_demos"]').forEach(e => { e.textContent = D.demos.length; });
+  const T = document.getElementById("dm-list"); T.replaceChildren();
+  const hr = h("tr", {}, h("thead", {}, T)); ["#", "Visualization", "What it proves", ""].forEach(c => h("th", {}, hr, c));
+  const tb = h("tbody", {}, T);
+  D.demos.forEach((dm, i) => { const tr = h("tr", {}, tb); h("td", {}, tr, i + 1); h("td", { style: "font-weight:600" }, tr, dm.name); h("td", {}, tr, dm.shows); const b = h("button", { type: "button", class: "toggle" }, h("td", {}, tr), "Show"); b.addEventListener("click", () => jump(dm.target)); });
+  const S = document.getElementById("dm-script"); S.replaceChildren();
+  const h2r = h("tr", {}, h("thead", {}, S)); ["Time", "On screen", "Say"].forEach(c => h("th", {}, h2r, c));
+  const tb2 = h("tbody", {}, S);
+  [["0–10 s", "A viral clip with a claim on screen", "\"Fact-checkers spend most of their time finding sources. Can a cheap open model do that part?\""],
+   ["10–25 s", "Test-set funnel", "\"65 claims from real videos, each labeled by a professional fact-checker, locked before any model ran.\""],
+   ["25–45 s", "Before/after example", "\"Off the shelf, the open model guesses and cites a page that doesn't say it. Our system finds the sentence and the scorer confirms it's really there.\""],
+   ["45–70 s", "Open vs frontier vs improved", "\"Here's every model before and after. The improved open model against the best frontier model…\" (read the headline tile)"],
+   ["70–90 s", "Significance table", "\"Two tests, corrected for 13 comparisons: this gain is / isn't luck.\""],
+   ["90–110 s", "Accuracy vs cost", "\"…at this cost per claim.\""],
+   ["110–120 s", "Headline tile", "\"One caveat: 65 claims, mostly political speech. The repo has everything to rerun it.\""]].forEach(r => { const tr = h("tr", {}, tb2); r.forEach(c => h("td", {}, tr, c)); });
+}
+function jump(target) {
+  const tab = target.startsWith("v-") ? "videos" : target.startsWith("s-") ? (["s-sft"].includes(target) ? "results" : "submission") : "results";
+  showTab(tab); setTimeout(() => { const el = document.getElementById(target); if (el) { el.scrollIntoView({ behavior: "smooth", block: "start" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1400); } }, 60);
+}
+
+// ---------- tabs and wiring ----------
+const TABS = [...document.querySelectorAll("section.tab")].map(s2 => s2.id.slice(4));
+const RENDER = { submission: renderSubmission, results: renderResults, claims: renderClaims, videos: renderVideos, rubric: renderRubric, improvements: renderImprovements, demo: renderDemo };
+let current = null;
+function showTab(name) {
+  if (!TABS.includes(name)) name = "submission";
+  current = name;
+  document.querySelectorAll("section.tab").forEach(s2 => s2.classList.toggle("on", s2.id === "tab-" + name));
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  if (location.hash.replace(/^#\/?/, "") !== name) { try { history.replaceState(null, "", "#" + name); } catch (e) { /* file:// in some browsers */ } }
+  RENDER[name]();
+}
+{
+  const nav = document.getElementById("tabs");
+  TABS.forEach(t => { const b = h("button", { type: "button", role: "tab", "data-tab": t }, nav, document.getElementById("tab-" + t).dataset.title); b.addEventListener("click", () => showTab(t)); });
+  const nR = RUNS.length, nM = new Set(RUNS.map(r => r.model)).size;
+  document.getElementById("meta").textContent = `${CL.length} claims · ${nM} models · ${nR} runs · judge ${M.judge} · retrieval ${M.retriever || "–"} · generated ${M.generated}`;
+  if (M.mock) { const b = h("div", { class: "banner" }, document.getElementById("banner")); h("b", {}, b, "Mock data. "); b.appendChild(document.createTextNode("Every model answer and judge score in this report comes from the offline mock backend (pseudo-random), not a real model, so no result here means anything yet. The test set, trap tags, fine-tuning data and rubric are real. Add API keys and run run_all.py to fill in real results.")); }
+  const ts = document.getElementById("f-type"); h("option", { value: "all" }, ts, "All types"); const types = {}; CL.forEach(c => c.claim_types.forEach(t => types[t] = (types[t] || 0) + 1)); Object.entries(types).sort((a, b) => b[1] - a[1]).forEach(([t, k]) => h("option", { value: t }, ts, `${t} (${k})`));
+  const tp = document.getElementById("f-trap"); h("option", { value: "all" }, tp, "All traps"); Object.entries(RUB.traps).forEach(([k, t]) => h("option", { value: k }, tp, `${t.name} (${CL.filter(c => c.traps.includes(k)).length})`));
+  document.querySelector('#f-slice option[value="nobig"]').textContent = `Without the largest video (${biggest[1]} claims)`;
+  document.getElementById("f-slice").addEventListener("change", e => { state.slice = e.target.value; renderResults(); });
+  document.getElementById("f-type").addEventListener("change", e => { state.type = e.target.value; renderResults(); });
+  document.getElementById("f-trap").addEventListener("change", e => { state.trap = e.target.value; renderResults(); });
+  document.querySelectorAll("#f-metric button").forEach(b => b.addEventListener("click", () => { state.metric = b.dataset.v; document.querySelectorAll("#f-metric button").forEach(o => o.setAttribute("aria-pressed", String(o === b))); renderResults(); }));
+  document.getElementById("theme").addEventListener("click", () => { const r = document.documentElement; r.dataset.theme = isDark() ? "light" : "dark"; RENDER[current](); });
+  addEventListener("hashchange", () => showTab(location.hash.replace(/^#\/?/, "")));
+  showTab(location.hash.replace(/^#\/?/, "") || "submission");
+}
+</script>
+</body>
+</html>
